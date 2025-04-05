@@ -1,25 +1,19 @@
 // components/Navbar.tsx
-"use client"; // This component will have client-side interaction eventually
+"use client"; // This component will have client-side interaction
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator"; // Import Separator
+import { Separator } from "@/components/ui/separator";
+import { LogOut, LogIn, UserPlus } from "lucide-react"; // Added UserPlus icon for registration
+import { useAuthStore } from "@/store/authStore"; // Import auth store
+import { useRouter } from "next/navigation"; // Add router for navigation
 
-// Temporary props - these will be replaced with real data later
-interface NavbarProps {
-  globalFund: number;
-  userBalance: number | null; // Null if not logged in
-  userName: string | null; // Null if not logged in
-  isLoggedIn: boolean;
-}
+export const Navbar: React.FC = () => {
+  const { isLoggedIn, user, logout } = useAuthStore();
+  const [globalFund] = useState(100000);
+  const router = useRouter();
 
-export const Navbar: React.FC<NavbarProps> = ({
-  globalFund,
-  userBalance,
-  userName,
-  isLoggedIn,
-}) => {
   return (
     <nav className="bg-background/80 backdrop-blur border-b border-border sticky top-0 z-50 w-full font-nunito">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
@@ -38,7 +32,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </span>
           </div>
 
-          {isLoggedIn && userName && userBalance !== null && (
+          {isLoggedIn && user ? (
             <>
               <Separator
                 orientation="vertical"
@@ -48,30 +42,50 @@ export const Navbar: React.FC<NavbarProps> = ({
               <div className="text-sm hidden sm:block">
                 <span className="text-muted-foreground">My Balance:</span>{" "}
                 <span className="font-semibold">
-                  ₹{userBalance.toLocaleString("en-IN")}
+                  ₹{user.accountBalance.toLocaleString("en-IN")}
                 </span>
               </div>
               <Separator orientation="vertical" className="h-6" />
               {/* User Name */}
               <span className="text-sm font-medium hidden md:block">
-                {userName}
+                {user.name}
               </span>
-              {/* We can add a logout button or user dropdown here later */}
+              {/* Logout Button */}
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={logout}
+                title="Logout"
+                className="h-8 w-8"
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </>
+          ) : (
+            <>
+              <Separator
+                orientation="vertical"
+                className="h-6 hidden sm:block"
+              />
+              {/* Login Button - Navigates to dedicated login page */}
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => router.push("/login")}
+              >
+                <LogIn className="mr-2 h-4 w-4" /> Login
+              </Button>
+              {/* Register Button - Navigates to dedicated register page */}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => router.push("/register")}
+                className="ml-2"
+              >
+                <UserPlus className="mr-2 h-4 w-4" /> Register
+              </Button>
             </>
           )}
-
-          {!isLoggedIn && (
-            <Link href="/register">
-              {" "}
-              {/* Link to registration page (we'll create this later) */}
-              <Button size="sm" variant="default">
-                {" "}
-                {/* Use Shadcn Button */}
-                Login / Register
-              </Button>
-            </Link>
-          )}
-          {/* Add Logout button or similar later */}
         </div>
       </div>
     </nav>

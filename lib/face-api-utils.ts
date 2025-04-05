@@ -7,6 +7,18 @@ let modelsLoaded = false;
 // Path to the models directory in the public folder
 const MODEL_URL = "/models";
 
+// Local storage keys
+const USERS_STORAGE_KEY = "dhanSetu_users";
+
+// Interface for stored user data
+export interface StoredUser {
+  userId: string;
+  name: string;
+  email: string;
+  faceDescriptor: number[]; // Float32Array stored as regular array
+  createdAt: string;
+}
+
 /**
  * Loads the required face-api.js models.
  * Ensures models are loaded only once.
@@ -20,22 +32,12 @@ export const loadModels = async (): Promise<void> => {
 
   try {
     console.log("Loading FaceAPI models...");
-    // Load the models concurrently
-    await Promise.all([
-      faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL), // Fast and good for web/mobile
-      // Or use TinyFaceDetector for even faster but less accurate detection:
-      // faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-      faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL), // Detect facial landmarks
-      faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL), // Compute face descriptor (for recognition)
-      // faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL), // Optional: if you want expression detection
-      // faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL),      // Optional: if you want age/gender detection
-    ]);
+    // Only load face detection model for simplicity
+    await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
     modelsLoaded = true;
     console.log("FaceAPI models loaded successfully.");
   } catch (error) {
     console.error("Error loading FaceAPI models:", error);
-    // Potentially set an error state or throw the error
-    // depending on how you want to handle loading failures
     modelsLoaded = false; // Reset flag on failure
     throw new Error("Failed to load face detection models.");
   }
@@ -50,50 +52,140 @@ export const areModelsLoaded = (): boolean => {
 };
 
 /**
- * Detects a single face in a video stream and computes its descriptor.
- * Assumes models are already loaded.
- *
+ * Detects if there is a face in the video stream - simplified version
  * @param videoElement The HTMLVideoElement currently displaying the webcam stream.
- * @returns A Promise resolving to the Float32Array descriptor or null if no face found/error.
+ * @returns A Promise resolving to true if a face is detected, false otherwise
  */
-export const getFaceDescriptor = async (
+export const isFaceDetected = async (
   videoElement: HTMLVideoElement | null
-): Promise<Float32Array | null> => {
+): Promise<boolean> => {
   if (!modelsLoaded) {
     console.error("Models not loaded yet.");
     throw new Error("Face API models are not loaded.");
   }
+
   if (!videoElement || videoElement.readyState < 3) {
-    // readyState < 3 means not enough data
     console.error("Video element not ready or not provided.");
-    return null;
+    return false;
   }
 
   try {
-    console.log("Attempting face detection...");
-    // Detect a single face with landmarks and compute the descriptor
-    const detection = await faceapi
-      .detectSingleFace(
-        videoElement,
-        new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 })
-      ) // Use appropriate detector and options
-      // Or: .detectSingleFace(videoElement, new faceapi.TinyFaceDetectorOptions())
-      .withFaceLandmarks() // Load landmarks is required for descriptor computation
-      .withFaceDescriptor();
+    console.log("Checking for face presence...");
+    // Detect faces with minimum confidence of 0.5
+    const detections = await faceapi.detectAllFaces(
+      videoElement,
+      new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 })
+    );
 
-    if (detection) {
-      console.log("Face detected, descriptor computed.");
-      return detection.descriptor;
-    } else {
-      console.log("No face detected in the frame.");
+    const hasFace = detections.length > 0;
+    console.log(`Face detected: ${hasFace ? "YES" : "NO"}`);
+    return hasFace;
+  } catch (error) {
+    console.error("Error during face detection:", error);
+    return false;
+  }
+};
+
+/**
+ * Store a user with their face descriptor in local storage
+ */
+export const storeUserFace = (
+  name: string,
+  email: string,
+  faceDescriptor: Float32Array
+): string => {
+  // Generate a simple user ID
+  const userId =
+    Date.now().toString(36) + Math.random().toString(36).substring(2);
+
+  // Create user object
+  const user: StoredUser = {
+    userId,
+    name,
+    email,
+    faceDescriptor: Array.from(faceDescriptor), // Convert Float32Array to regular array for storage
+    createdAt: new Date().toISOString(),
+  };
+
+  // Get existing users or initialize empty array
+  const existingUsers: StoredUser[] = getStoredUsers();
+
+  console.log("Before storing, existing users:", existingUsers);
+
+  // Add new user
+  existingUsers.push(user);
+
+  console.log("After adding new user:", existingUsers);
+
+  // Save back to local storage
+  localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(existingUsers));
+
+  // Verify it was stored
+  const verifyStorage = localStorage.getItem(USERS_STORAGE_KEY);
+  console.log("Verification from localStorage:", verifyStorage);
+
+  return userId;
+};
+
+/**
+ * Get all stored users from local storage
+ */
+export const getStoredUsers = (): StoredUser[] => {
+  try {
+    const usersJson = localStorage.getItem(USERS_STORAGE_KEY);
+
+    // Debug info
+    console.log("Retrieved from localStorage:", usersJson);
+
+    if (!usersJson) {
+      console.log("No users stored in localStorage");
+      return [];
+    }
+
+    const parsedUsers = JSON.parse(usersJson);
+    console.log("Parsed users:", parsedUsers);
+    return parsedUsers;
+  } catch (error) {
+    console.error("Error retrieving stored users:", error);
+    return [];
+  }
+};
+
+/**
+ * Find a user by name and user ID from API
+ */
+export const findUserByCredentials = async (
+  name: string,
+  userId: string
+): Promise<any> => {
+  try {
+    console.log("Fetching users from API for credential verification");
+
+    // Create a credential verification endpoint
+    const response = await fetch("/api/auth/verify-credentials", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ name, userId }), // Changed from email to userId
+    });
+
+    if (!response.ok) {
+      console.error("API error:", response.status);
       return null;
     }
+
+    const data = await response.json();
+    console.log("API response for credentials:", data);
+
+    if (data.user) {
+      return data.user;
+    }
+
+    return null;
   } catch (error) {
-    console.error(
-      "Error during face detection or descriptor computation:",
-      error
-    );
-    return null; // Return null or re-throw error as needed
+    console.error("Error verifying credentials:", error);
+    return null;
   }
 };
 
@@ -146,4 +238,12 @@ export const stopWebcam = (
   if (videoElement) {
     videoElement.srcObject = null; // Release the video source
   }
+};
+
+/**
+ * Clear all stored users (for testing/development)
+ */
+export const clearStoredUsers = (): void => {
+  localStorage.removeItem(USERS_STORAGE_KEY);
+  console.log("All stored users cleared");
 };

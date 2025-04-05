@@ -57,6 +57,7 @@ export default function RegisterPage() {
   // Camera state
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const detectionCanvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const captureIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const detectionIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -71,6 +72,9 @@ export default function RegisterPage() {
   );
   const [capturedImages, setCapturedImages] = useState<string[]>([]);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [detectedFaces, setDetectedFaces] = useState<faceapi.FaceDetection[]>(
+    []
+  );
 
   // Add to log with timestamp (for debugging)
   const logMessage = (message: string) => {
@@ -101,12 +105,24 @@ export default function RegisterPage() {
     return canvas.toDataURL("image/jpeg", 0.9);
   };
 
-  // Start camera - Using the working camcheck pattern
+  // Fix for the video display issue in the startCamera function
   const startCamera = async () => {
     try {
       setIsLoading(true);
       setCameraError(null);
       logMessage("Starting camera...");
+
+      // Clear existing captures when starting camera
+      setCapturedImages([]);
+      setDetectionStatus("idle");
+      setFeedbackMessage("Starting camera, please wait...");
+
+      // Stop any existing detection interval
+      if (detectionIntervalRef.current) {
+        clearInterval(detectionIntervalRef.current);
+        detectionIntervalRef.current = null;
+      }
+      setDetectedFaces([]); // Reset detected faces array
 
       // Stop any existing stream first
       if (streamRef.current) {
@@ -123,42 +139,73 @@ export default function RegisterPage() {
           facingMode: "user",
         },
       });
-
       logMessage(`Camera stream obtained: ${stream.id}`);
       logMessage(`Active video tracks: ${stream.getVideoTracks().length}`);
 
       if (videoRef.current) {
+        // Directly set the srcObject
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
 
-        // Wait for metadata to load
-        await new Promise<void>((resolve) => {
-          if (!videoRef.current) {
-            resolve();
-            return;
-          }
-
-          videoRef.current.onloadedmetadata = () => {
-            logMessage("Video metadata loaded");
-            resolve();
-          };
-        });
-
-        // Start playing
-        await videoRef.current.play();
-        logMessage("Video playback started");
+        // Important: Set camera as active immediately to show the video
         setCameraActive(true);
 
-        // Log video element state
-        const videoEl = videoRef.current;
-        logMessage(
-          `Video state: ${videoEl.readyState}, paused: ${videoEl.paused}, width: ${videoEl.videoWidth}x${videoEl.videoHeight}`
-        );
+        logMessage("Video element setup complete, waiting for metadata");
 
-        toast.success("Camera activated successfully");
+        // Add event listeners for tracking video readiness
+        videoRef.current.onloadedmetadata = async () => {
+          logMessage("Video metadata loaded");
 
-        // Start face detection
-        startFaceDetection();
+          try {
+            // Play the video
+            await videoRef.current?.play();
+            logMessage("Video playback started successfully");
+
+            // Force a repaint to ensure video shows up
+            setTimeout(() => {
+              if (videoRef.current) {
+                videoRef.current.style.display = "none";
+                // Force browser to recalculate layout
+                void videoRef.current.offsetHeight;
+                videoRef.current.style.display = "";
+              }
+            }, 50);
+
+            // Initialize detection canvas after video dimensions are known
+            if (detectionCanvasRef.current && videoRef.current) {
+              const canvas = detectionCanvasRef.current;
+              canvas.width = videoRef.current.videoWidth || 640;
+              canvas.height = videoRef.current.videoHeight || 480;
+
+              const ctx = canvas.getContext("2d");
+              if (ctx) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+              }
+            }
+
+            toast.success("Camera activated successfully");
+            setIsLoading(false);
+          } catch (error) {
+            logMessage(`Error playing video: ${error}`);
+            setCameraError("Failed to start video playback");
+            toast.error("Failed to start video playback");
+            setDetectionStatus("error");
+            setIsLoading(false);
+          }
+        };
+
+        // Handle errors during metadata loading
+        videoRef.current.onerror = (event) => {
+          logMessage(
+            `Video element error: ${
+              videoRef.current?.error?.message || "Unknown error"
+            }`
+          );
+          setCameraError("Video initialization failed");
+          toast.error("Failed to initialize video");
+          setDetectionStatus("error");
+          setIsLoading(false);
+        };
       }
     } catch (error: any) {
       logMessage(`Camera error: ${error.message}`);
@@ -167,12 +214,11 @@ export default function RegisterPage() {
         `Camera error: ${error.message || "Failed to access camera"}`
       );
       setDetectionStatus("error");
-    } finally {
       setIsLoading(false);
     }
   };
 
-  // Stop camera - Direct from camcheck
+  // Stop camera
   const stopCamera = () => {
     if (streamRef.current) {
       logMessage("Stopping camera stream...");
@@ -186,6 +232,19 @@ export default function RegisterPage() {
       if (captureIntervalRef.current) {
         clearInterval(captureIntervalRef.current);
         captureIntervalRef.current = null;
+      }
+
+      // Clean detection canvas
+      if (detectionCanvasRef.current) {
+        const ctx = detectionCanvasRef.current.getContext("2d");
+        if (ctx) {
+          ctx.clearRect(
+            0,
+            0,
+            detectionCanvasRef.current.width,
+            detectionCanvasRef.current.height
+          );
+        }
       }
 
       // Stop all tracks
@@ -202,19 +261,48 @@ export default function RegisterPage() {
       setCameraActive(false);
       setIsCapturing(false);
       setDetectionStatus("idle");
+      setDetectedFaces([]);
       logMessage("Camera stopped");
     } else {
       logMessage("No active stream to stop");
     }
   };
 
-  // Start face detection loop
-  const startFaceDetection = () => {
-    if (!cameraActive || detectionIntervalRef.current) return;
+  // Improved startFaceDetection function
+  const startFaceDetection = useCallback(() => {
+    // Clear any existing detection interval first
+    if (detectionIntervalRef.current) {
+      clearInterval(detectionIntervalRef.current);
+      detectionIntervalRef.current = null;
+    }
 
-    setDetectionStatus("no_face");
+    // Prerequisites check (still useful)
+    if (
+      !cameraActive ||
+      !videoRef.current ||
+      !detectionCanvasRef.current ||
+      faceApiLoadingState !== "loaded"
+    ) {
+      logMessage("Cannot start face detection - prerequisites not met");
+      return; // Exit if basic conditions aren't met
+    }
+
+    logMessage("Starting face detection loop - video should be ready");
+    setDetectionStatus("no_face"); // Set initial status
     setFeedbackMessage("Position your face in the center of the frame");
 
+    // Set up canvas dimensions based on the *now ready* video element
+    const videoEl = videoRef.current;
+    const canvas = detectionCanvasRef.current;
+    canvas.width = videoEl.videoWidth;
+    canvas.height = videoEl.videoHeight;
+
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    // Start detection interval
     detectionIntervalRef.current = setInterval(async () => {
       if (
         !videoRef.current ||
@@ -232,6 +320,74 @@ export default function RegisterPage() {
             minConfidence: FACE_CONFIDENCE_THRESHOLD,
           })
         );
+
+        logMessage(`Detected ${detections.length} faces`);
+
+        // Store the detected faces for visualization
+        setDetectedFaces(detections);
+
+        // Draw detection rectangles
+        if (detectionCanvasRef.current && videoRef.current) {
+          const displaySize = {
+            width: videoRef.current.videoWidth,
+            height: videoRef.current.videoHeight,
+          };
+
+          // Match canvas size to video
+          faceapi.matchDimensions(detectionCanvasRef.current, displaySize);
+
+          // Draw detections on canvas
+          const ctx = detectionCanvasRef.current.getContext("2d");
+          if (ctx) {
+            ctx.clearRect(
+              0,
+              0,
+              detectionCanvasRef.current.width,
+              detectionCanvasRef.current.height
+            );
+
+            // Flip context for mirrored video
+            ctx.save();
+            ctx.scale(-1, 1);
+            ctx.translate(-displaySize.width, 0);
+
+            // Draw boxes with different colors based on detection status
+            detections.forEach((detection) => {
+              // Draw detection box
+              ctx.strokeStyle = detections.length === 1 ? "#4ade80" : "#f87171"; // Green for single face, red for multiple
+              ctx.lineWidth = 3;
+              ctx.strokeRect(
+                detection.box.x,
+                detection.box.y,
+                detection.box.width,
+                detection.box.height
+              );
+
+              // Add confidence text - fix for mirrored display
+              const confidenceText = `${Math.round(detection.score * 100)}%`;
+              // Restore context to draw text normally
+              ctx.restore();
+
+              // Set text properties
+              ctx.fillStyle = "white";
+              ctx.font = "28px Arial"; // Keeping this as 28px Arial as requested
+
+              // Calculate correct position in mirrored context
+              const textX =
+                displaySize.width - detection.box.x - detection.box.width;
+
+              // Draw the text
+              ctx.fillText(confidenceText, textX, detection.box.y - 5);
+
+              // Re-save and re-flip for next iteration
+              ctx.save();
+              ctx.scale(-1, 1);
+              ctx.translate(-displaySize.width, 0);
+            });
+
+            ctx.restore();
+          }
+        }
 
         // Update status based on detection results
         if (detections.length === 0) {
@@ -257,10 +413,12 @@ export default function RegisterPage() {
         setFeedbackMessage("Error during face detection. Please try again.");
       }
     }, 500);
-  };
+  }, [cameraActive, faceApiLoadingState]); // Add dependencies
 
   // Start capturing multiple face images
   const startCapturing = async () => {
+    logMessage("Starting capture process...");
+
     if (
       !videoRef.current ||
       !cameraActive ||
@@ -283,10 +441,15 @@ export default function RegisterPage() {
       detectionIntervalRef.current = null;
     }
 
-    // Start interval for capturing multiple images
-    let captureCount = 0;
+    // Create a local count to track captures within closure
+    let currentCount = 0;
+
+    logMessage("Setting up capture interval...");
     captureIntervalRef.current = setInterval(() => {
-      if (captureCount >= CAPTURE_COUNT) {
+      logMessage(`Capture iteration: ${currentCount}/${CAPTURE_COUNT}`);
+
+      if (currentCount >= CAPTURE_COUNT) {
+        logMessage("Capture count reached, stopping capture process");
         // Capture complete
         if (captureIntervalRef.current) {
           clearInterval(captureIntervalRef.current);
@@ -305,68 +468,155 @@ export default function RegisterPage() {
       // Take snapshot
       const snapshot = takeSnapshot();
       if (snapshot) {
-        captureCount++;
-        setCapturedImages((prev) => [...prev, snapshot]);
-        setFeedbackMessage(
-          `Capturing images (${captureCount}/${CAPTURE_COUNT})...`
-        );
-        logMessage(`Captured image ${captureCount}/${CAPTURE_COUNT}`);
+        currentCount++;
+        logMessage(`Captured image ${currentCount}/${CAPTURE_COUNT}`);
+
+        setCapturedImages((prev) => {
+          const newImages = [...prev, snapshot];
+          setFeedbackMessage(
+            `Capturing images (${newImages.length}/${CAPTURE_COUNT})...`
+          );
+          return newImages;
+        });
+      } else {
+        logMessage("Failed to take snapshot");
       }
     }, CAPTURE_INTERVAL_MS);
   };
 
-  // Form submission
+  // Emergency capture function
+  const emergencyCapture = () => {
+    if (!cameraActive || isCapturing || faceApiLoadingState !== "loaded") {
+      toast.error("Camera must be active and not already capturing");
+      return;
+    }
+
+    // Properly clean up any existing detection
+    if (detectionIntervalRef.current) {
+      clearInterval(detectionIntervalRef.current);
+      detectionIntervalRef.current = null;
+    }
+
+    toast.info("Starting emergency capture - hold still");
+    setDetectionStatus("capturing"); // Set the status explicitly
+    startCapturing();
+  };
+
+  // Updated handle submit to call API
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (capturedImages.length < CAPTURE_COUNT) {
-      toast.error("Please complete the face capture process");
+    if (detectionStatus !== "complete") {
+      toast.error("Please complete the face capture process first.");
       return;
     }
 
     if (!canSubmit) {
-      toast.error("Please fill all required fields");
+      toast.error("Please fill all required fields.");
       return;
     }
 
     setIsSubmitting(true);
     toast.info("Submitting registration...");
 
-    // Prepare registration data
+    // Data to send to API
     const registrationData = {
       name,
       email,
       age,
       address,
       bankAccount,
-      faceImagesCaptured: true, // Flag for User type
-      images: capturedImages, // The array of base64 images
+      images: capturedImages, // Send the array of base64 images
     };
 
-    console.log("Form Data for Submission:", {
-      ...registrationData,
-      images: `${capturedImages.length} images captured`, // Don't log actual images
-    });
+    try {
+      console.log("Sending data to /api/register:", {
+        ...registrationData,
+        images: `${capturedImages.length} images`,
+      });
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+      const response = await fetch("/api/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(registrationData),
+      });
 
-    toast.success("Registration successful! Redirecting...");
-    setIsSubmitting(false);
+      const result = await response.json(); // Always try to parse JSON
 
-    // Redirect after delay
-    setTimeout(() => router.push("/"), 2000);
+      if (!response.ok) {
+        // Handle API errors (e.g., email exists, server error)
+        console.error("API Error Response:", result);
+        toast.error(
+          `Registration failed: ${
+            result.message || `Server error ${response.status}`
+          }`
+        );
+        setIsSubmitting(false);
+        return; // Stop execution on failure
+      }
+
+      // Success
+      console.log("API Success Response:", result);
+      toast.success(`Registration successful! User ID: ${result.userId}`);
+
+      // Clear form data for security
+      setCapturedImages([]);
+
+      // Redirect after a short delay
+      setTimeout(() => router.push("/"), 2500);
+    } catch (error) {
+      console.error("Error submitting registration:", error);
+      toast.error(
+        "An unexpected error occurred while submitting. Please try again."
+      );
+      setIsSubmitting(false);
+    }
   };
 
-  // Reset face capture
+  // Reset capture - Improved to ensure proper cleanup and reset
   const resetCapture = () => {
+    // Always clear captured images
     setCapturedImages([]);
     setDetectionStatus("idle");
     setFeedbackMessage("Face capture reset. Start camera to begin again.");
 
-    // Don't automatically restart camera - let user decide
-    if (cameraActive) {
-      startFaceDetection();
+    // Clean up any existing detection interval
+    if (detectionIntervalRef.current) {
+      clearInterval(detectionIntervalRef.current);
+      detectionIntervalRef.current = null;
+    }
+
+    // Clear the canvas
+    if (detectionCanvasRef.current) {
+      const ctx = detectionCanvasRef.current.getContext("2d");
+      if (ctx) {
+        ctx.clearRect(
+          0,
+          0,
+          detectionCanvasRef.current.width,
+          detectionCanvasRef.current.height
+        );
+      }
+    }
+
+    // If camera is still active, restart the entire process
+    if (cameraActive && streamRef.current) {
+      // Stop camera first
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+
+      setCameraActive(false);
+
+      // Restart camera after a short delay
+      setTimeout(() => {
+        startCamera();
+      }, 200);
     }
   };
 
@@ -391,6 +641,65 @@ export default function RegisterPage() {
       stopCamera();
     };
   }, [faceApiError]);
+
+  // New useEffect for reliable face detection tracking
+  useEffect(() => {
+    const videoElement = videoRef.current;
+
+    // Define the handler function separately
+    const handleVideoPlaying = () => {
+      logMessage("Video 'onplaying' event fired.");
+      // Ensure models are loaded before starting detection
+      if (faceApiLoadingState === "loaded") {
+        logMessage(
+          "Conditions met, calling startFaceDetection from onplaying handler."
+        );
+        startFaceDetection();
+      } else {
+        logMessage("Models not loaded yet, skipping startFaceDetection call.");
+      }
+    };
+
+    // Only proceed if camera is intended to be active and video element exists
+    if (cameraActive && videoElement) {
+      logMessage(
+        "useEffect: Camera is active, checking video state and adding 'onplaying' listener."
+      );
+
+      // Add the event listener
+      videoElement.addEventListener("playing", handleVideoPlaying);
+
+      // Also check if video is *already* playing (e.g., due to autoPlay)
+      // readyState >= 3 means enough data is available to start playing
+      if (
+        !videoElement.paused &&
+        videoElement.readyState >= 3 &&
+        faceApiLoadingState === "loaded"
+      ) {
+        logMessage(
+          "useEffect: Video already playing/ready, calling startFaceDetection directly."
+        );
+        startFaceDetection(); // Call immediately if already playing
+      }
+
+      // Cleanup function for this effect
+      return () => {
+        logMessage("useEffect cleanup: Removing 'onplaying' listener.");
+        videoElement.removeEventListener("playing", handleVideoPlaying);
+      };
+    } else {
+      // If camera becomes inactive, ensure detection interval is cleared
+      if (detectionIntervalRef.current) {
+        logMessage(
+          "useEffect: Camera not active, clearing detection interval."
+        );
+        clearInterval(detectionIntervalRef.current);
+        detectionIntervalRef.current = null;
+      }
+    }
+
+    // Dependencies: cameraActive state and model loading state
+  }, [cameraActive, faceApiLoadingState, startFaceDetection]); // Added startFaceDetection as dependency
 
   // Check if form can be submitted
   const canSubmit =
@@ -455,10 +764,10 @@ export default function RegisterPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="bankAccount">Bank Account Number (Mock)</Label>
+                <Label htmlFor="bankAccount">Bank Account Number</Label>
                 <Input
                   id="bankAccount"
-                  placeholder="Mock account number"
+                  placeholder="account number"
                   value={bankAccount}
                   onChange={(e) => setBankAccount(e.target.value)}
                   required
@@ -466,7 +775,7 @@ export default function RegisterPage() {
                 />
               </div>
               <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="address">Address (Mock)</Label>
+                <Label htmlFor="address">Address </Label>
                 <Textarea
                   id="address"
                   placeholder="Mock street address, city, country"
@@ -512,14 +821,23 @@ export default function RegisterPage() {
                       className="relative bg-black rounded overflow-hidden mb-3"
                       style={{ aspectRatio: "4/3" }}
                     >
-                      {/* Video Element */}
+                      {/* Video Element - Updated for better display */}
                       <video
                         ref={videoRef}
-                        className="absolute inset-0 w-full h-full object-cover"
+                        className="absolute inset-0 w-full h-full object-cover z-0"
                         muted
                         playsInline
                         autoPlay
-                        style={{ transform: "scaleX(-1)" }}
+                        style={{
+                          transform: "scaleX(-1)",
+                          display: cameraActive ? "block" : "none", // Ensure video shows when camera is active
+                        }}
+                      />
+
+                      {/* Detection Canvas - Add this */}
+                      <canvas
+                        ref={detectionCanvasRef}
+                        className="absolute inset-0 w-full h-full"
                       />
 
                       {/* Hidden Canvas for Capturing */}
@@ -529,10 +847,10 @@ export default function RegisterPage() {
                       {!cameraActive &&
                         !isCapturing &&
                         detectionStatus !== "complete" && (
-                          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-white">
+                          <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/90 text-foreground">
                             {cameraError ? (
                               <>
-                                <VideoOff className="w-10 h-10 text-red-500 mb-2" />
+                                <VideoOff className="w-10 h-10 text-destructive mb-2" />
                                 <p className="text-center text-sm px-4">
                                   {cameraError}
                                 </p>
@@ -555,24 +873,24 @@ export default function RegisterPage() {
                       {cameraActive &&
                         !isCapturing &&
                         detectionStatus !== "complete" && (
-                          <div className="absolute bottom-0 left-0 right-0 p-3 bg-blue-800 bg-opacity-90 z-10">
-                            <p className="text-white text-center text-sm font-medium">
+                          <div className="absolute bottom-0 left-0 right-0 p-3 bg-primary text-primary-foreground z-10">
+                            <p className="text-center text-sm font-medium">
                               {detectionStatus === "no_face" && (
                                 <>
-                                  <AlertCircle className="w-4 h-4 inline mr-2 text-yellow-300" />
+                                  <AlertCircle className="w-4 h-4 inline mr-2" />
                                   No face detected. Position your face in frame.
                                 </>
                               )}
                               {detectionStatus === "multiple_faces" && (
                                 <>
-                                  <AlertCircle className="w-4 h-4 inline mr-2 text-orange-300" />
+                                  <AlertCircle className="w-4 h-4 inline mr-2" />
                                   Multiple faces detected. Ensure only you are
                                   visible.
                                 </>
                               )}
                               {detectionStatus === "ready_to_capture" && (
                                 <>
-                                  <CheckCircle2 className="w-4 h-4 inline mr-2 text-green-300" />
+                                  <CheckCircle2 className="w-4 h-4 inline mr-2" />
                                   Face detected! Ready to capture.
                                 </>
                               )}
@@ -582,51 +900,35 @@ export default function RegisterPage() {
 
                       {/* Loading overlay */}
                       {isLoading && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-10">
-                          <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
-                          <span className="text-white ml-3">
-                            Starting camera...
-                          </span>
+                        <div className="absolute inset-0 flex items-center justify-center bg-background/95 z-10">
+                          <Loader2 className="w-10 h-10 text-primary animate-spin" />
+                          <span className="ml-3">Starting camera...</span>
                         </div>
                       )}
 
                       {/* Capture in progress overlay */}
                       {isCapturing && (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 z-10">
-                          <Loader2 className="w-12 h-12 text-blue-500 animate-spin mb-3" />
-                          <p className="text-white text-center text-lg font-medium">
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/95 z-10">
+                          <Loader2 className="w-12 h-12 text-primary animate-spin mb-3" />
+                          <p className="text-center text-lg font-medium">
                             Capturing {capturedImages.length}/{CAPTURE_COUNT}...
                           </p>
-                          <Progress
-                            value={captureProgress}
-                            className="w-3/4 h-2 mt-4 bg-gray-600"
-                          />
+                          <div className="w-3/4 mt-4">
+                            <Progress value={captureProgress} className="h-2" />
+                          </div>
                         </div>
                       )}
 
                       {/* Success overlay */}
                       {detectionStatus === "complete" && (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 z-10">
-                          <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mb-2">
-                            <svg
-                              className="w-10 h-10 text-white"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 24 24"
-                              xmlns="http://www.w3.org/2000/svg"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={3}
-                                d="M5 13l4 4L19 7"
-                              />
-                            </svg>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/95 z-10">
+                          <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center mb-2">
+                            <CheckCircle2 className="w-10 h-10 text-primary-foreground" />
                           </div>
-                          <p className="text-white font-medium text-lg">
+                          <p className="font-medium text-lg">
                             Face Capture Complete
                           </p>
-                          <p className="text-white/80 text-sm mt-1">
+                          <p className="text-muted-foreground text-sm mt-1">
                             All {CAPTURE_COUNT} images captured successfully
                           </p>
                         </div>
@@ -645,11 +947,7 @@ export default function RegisterPage() {
                               faceApiLoadingState !== "loaded" ||
                               isLoading
                             }
-                            className={`px-4 py-2 ${
-                              cameraActive
-                                ? "bg-gray-400"
-                                : "bg-blue-500 hover:bg-blue-600 text-white"
-                            }`}
+                            variant={cameraActive ? "outline" : "default"}
                           >
                             Start Camera
                           </Button>
@@ -658,11 +956,7 @@ export default function RegisterPage() {
                             type="button"
                             onClick={stopCamera}
                             disabled={!cameraActive}
-                            className={`px-4 py-2 ${
-                              !cameraActive
-                                ? "bg-gray-400"
-                                : "bg-red-500 hover:bg-red-600 text-white"
-                            }`}
+                            variant="destructive"
                           >
                             Stop Camera
                           </Button>
@@ -675,14 +969,22 @@ export default function RegisterPage() {
                               detectionStatus !== "ready_to_capture" ||
                               faceApiLoadingState !== "loaded"
                             }
-                            className={`px-4 py-2 ${
-                              !cameraActive ||
-                              detectionStatus !== "ready_to_capture"
-                                ? "bg-gray-400"
-                                : "bg-green-500 hover:bg-green-600 text-white"
-                            }`}
+                            variant="secondary"
                           >
                             Capture Face
+                          </Button>
+
+                          <Button
+                            type="button"
+                            onClick={emergencyCapture}
+                            disabled={
+                              !cameraActive ||
+                              isCapturing ||
+                              faceApiLoadingState !== "loaded"
+                            }
+                            variant="secondary"
+                          >
+                            Emergency Capture
                           </Button>
                         </>
                       )}
@@ -702,15 +1004,15 @@ export default function RegisterPage() {
 
                   {/* Instructions Area */}
                   <div className="w-full md:w-1/2 space-y-4">
-                    <div className="bg-blue-50 p-4 rounded-md border border-blue-100">
-                      <h3 className="font-medium text-blue-800 mb-2">
+                    <Card className="bg-card p-4">
+                      <CardTitle className="text-sm font-medium mb-2">
                         {detectionStatus === "complete"
                           ? "✅ Face Capture Completed"
                           : "Face Capture Instructions"}
-                      </h3>
+                      </CardTitle>
 
                       {detectionStatus !== "complete" ? (
-                        <ol className="text-sm text-blue-700 space-y-2 list-decimal pl-4">
+                        <ol className="text-sm text-muted-foreground space-y-2 list-decimal pl-4">
                           <li>
                             Click <strong>Start Camera</strong> to activate your
                             webcam
@@ -734,14 +1036,14 @@ export default function RegisterPage() {
                         </ol>
                       ) : (
                         <>
-                          <p className="text-sm text-blue-700 mb-2">
+                          <p className="text-sm text-muted-foreground mb-2">
                             Your face has been successfully captured with{" "}
                             {CAPTURE_COUNT} images. You can now complete your
                             registration.
                           </p>
 
-                          <div className="mt-3 pt-3 border-t border-blue-100">
-                            <p className="text-xs text-blue-600 flex items-center">
+                          <div className="mt-3 pt-3 border-t">
+                            <p className="text-xs text-muted-foreground flex items-center">
                               <CheckCircle2 className="w-3 h-3 mr-1" />
                               These images will be stored securely for
                               verification.
@@ -749,32 +1051,32 @@ export default function RegisterPage() {
                           </div>
                         </>
                       )}
-                    </div>
+                    </Card>
 
                     {/* Status Cards */}
                     {cameraActive &&
                       !isCapturing &&
                       detectionStatus !== "complete" && (
-                        <div className="bg-green-50 border border-green-100 p-3 rounded-md">
-                          <p className="text-sm text-green-700">
-                            <span className="inline-block w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                        <Card className="p-3 border-primary/20 bg-primary/5">
+                          <p className="text-sm text-primary flex items-center">
+                            <span className="inline-block w-2 h-2 bg-primary rounded-full mr-2"></span>
                             Camera is active! {feedbackMessage}
                           </p>
-                        </div>
+                        </Card>
                       )}
 
                     {cameraError && (
-                      <div className="bg-red-50 border border-red-100 p-3 rounded-md">
-                        <p className="text-sm text-red-700">
-                          <span className="inline-block w-2 h-2 bg-red-500 rounded-full mr-2"></span>
+                      <Card className="p-3 border-destructive/20 bg-destructive/5">
+                        <p className="text-sm text-destructive flex items-center">
+                          <span className="inline-block w-2 h-2 bg-destructive rounded-full mr-2"></span>
                           {cameraError}
                         </p>
-                      </div>
+                      </Card>
                     )}
 
                     {isCapturing && (
-                      <div className="bg-blue-50 border border-blue-100 p-3 rounded-md">
-                        <p className="text-sm text-blue-700 flex items-center">
+                      <Card className="p-3 border-primary/20 bg-primary/5">
+                        <p className="text-sm text-primary flex items-center">
                           <Loader2 className="w-3 h-3 mr-2 animate-spin" />
                           Capturing {capturedImages.length} of {CAPTURE_COUNT}{" "}
                           images...
@@ -783,17 +1085,29 @@ export default function RegisterPage() {
                           value={captureProgress}
                           className="mt-2 h-1"
                         />
-                      </div>
+                      </Card>
                     )}
 
                     {detectionStatus === "complete" && (
-                      <div className="bg-green-50 border border-green-100 p-3 rounded-md">
-                        <p className="text-sm text-green-700 flex items-center">
+                      <Card className="p-3 border-primary/20 bg-primary/5">
+                        <p className="text-sm text-primary flex items-center">
                           <CheckCircle2 className="w-4 h-4 mr-2" />
                           All {CAPTURE_COUNT} images captured successfully!
                         </p>
-                      </div>
+                      </Card>
                     )}
+
+                    {/* Current Progress
+                    {capturedImages.length > 0 &&
+                      capturedImages.length < CAPTURE_COUNT && (
+                        <Card className="p-3">
+                          <p className="text-sm mb-1">Capture Progress</p>
+                          <Progress value={captureProgress} className="h-2" />
+                          <p className="text-xs text-muted-foreground mt-1 text-right">
+                            {capturedImages.length} of {CAPTURE_COUNT} images
+                          </p>
+                        </Card>
+                      )} */}
                   </div>
                 </div>
               </Card>

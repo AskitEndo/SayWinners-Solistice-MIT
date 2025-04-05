@@ -1,8 +1,7 @@
-"use client"; // This page needs client-side hooks and interaction
+"use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
-import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
 import {
   Card,
   CardHeader,
@@ -10,24 +9,23 @@ import {
   CardDescription,
   CardContent,
 } from "@/components/ui/card";
-import { useFaceApiLoader } from "@/hooks/useFaceApiLoader";
-import Link from "next/link";
-import { Skeleton } from "@/components/ui/skeleton"; // For loading state
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useAuthStore } from "@/store/authStore";
 
-export default function Home() {
-  const { loadingState: faceApiLoadingState, error: faceApiError } =
-    useFaceApiLoader();
-  const [globalFund, setGlobalFund] = useState<number | null>(null); // Start as null
+export default function HomePage() {
+  const router = useRouter();
+  const { isLoggedIn, user } = useAuthStore();
+  const [globalFund, setGlobalFund] = useState<number | null>(null);
   const [isLoadingFund, setIsLoadingFund] = useState(true);
 
-  // Temporary simulation of fetching global fund on client
+  // Simulate fetching global fund
   useEffect(() => {
     const fetchInitialData = async () => {
       setIsLoadingFund(true);
       try {
-        // Simulate fetching - In reality, this should call an API route or use server props
-        await new Promise((resolve) => setTimeout(resolve, 500)); // Simulate network delay
-        setGlobalFund(100000); // Set the initial value
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        setGlobalFund(100000);
       } catch (error) {
         console.error("Failed to fetch global fund:", error);
       } finally {
@@ -37,52 +35,24 @@ export default function Home() {
     fetchInitialData();
   }, []);
 
-  const handleBorrowClick = () => {
-    // TODO: Check if logged in, if not redirect to register
-    alert("Borrow Money Clicked - Redirect logic needed");
-  };
+  // Handle action button clicks
+  const handleActionClick = (action: "borrow" | "deposit") => {
+    if (!isLoggedIn) {
+      // Redirect to login page instead of showing dialog
+      router.push("/login");
+      return;
+    }
 
-  const handleDepositClick = () => {
-    // TODO: Check if logged in, if not redirect to register
-    alert("Deposit Money Clicked - Redirect logic needed");
+    // Handle logged-in user actions
+    if (action === "borrow") {
+      router.push("/borrow");
+    } else {
+      router.push("/deposit");
+    }
   };
 
   return (
     <div className="space-y-8">
-      {/* Face API Loading Status */}
-      {faceApiLoadingState === "loading" && (
-        <Card className="bg-blue-50 border-blue-200">
-          <CardHeader>
-            <CardTitle className="text-blue-800">
-              Initializing Face Recognition
-            </CardTitle>
-            <CardDescription>Loading models, please wait...</CardDescription>
-          </CardHeader>
-        </Card>
-      )}
-      {faceApiLoadingState === "error" && (
-        <Card className="bg-red-50 border-red-200">
-          <CardHeader>
-            <CardTitle className="text-red-800">
-              Face Recognition Error
-            </CardTitle>
-            <CardDescription>
-              {faceApiError || "Could not load face models."}
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      )}
-      {faceApiLoadingState === "loaded" && (
-        <Card className="bg-green-50 border-green-200">
-          <CardHeader>
-            <CardTitle className="text-green-800">
-              Face Recognition Ready
-            </CardTitle>
-            <CardDescription>Models loaded successfully.</CardDescription>
-          </CardHeader>
-        </Card>
-      )}
-
       {/* Global Fund Display */}
       <Card>
         <CardHeader>
@@ -90,7 +60,7 @@ export default function Home() {
         </CardHeader>
         <CardContent>
           {isLoadingFund ? (
-            <Skeleton className="h-6 w-48" /> // Skeleton loader
+            <Skeleton className="h-6 w-48" />
           ) : (
             <p className="text-lg">
               Current Global Fund:{" "}
@@ -107,23 +77,53 @@ export default function Home() {
         <CardHeader>
           <CardTitle>Get Started</CardTitle>
           <CardDescription>
-            Choose an action below. You may need to register first.
+            {isLoggedIn
+              ? `Welcome back, ${user?.name}! Choose an action below.`
+              : "Choose an action below or sign in to continue."}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col sm:flex-row gap-4">
-          <Button size="lg" className="flex-1" onClick={handleBorrowClick}>
+          <Button
+            size="lg"
+            className="flex-1"
+            onClick={() => handleActionClick("borrow")}
+          >
             Borrow Money
           </Button>
           <Button
             size="lg"
             variant="outline"
             className="flex-1"
-            onClick={handleDepositClick}
+            onClick={() => handleActionClick("deposit")}
           >
             Deposit Money
           </Button>
         </CardContent>
       </Card>
+
+      {/* Account Access Section
+      {!isLoggedIn && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Account Access</CardTitle>
+            <CardDescription>
+              Create an account or log in to access platform features
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex gap-4">
+            <Button onClick={() => router.push("/login")} className="flex-1">
+              Login with Face ID
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => router.push("/register")}
+              className="flex-1"
+            >
+              Register New Account
+            </Button>
+          </CardContent>
+        </Card>
+      )} */}
 
       {/* Pending Approvals Section */}
       <Card>
@@ -134,19 +134,25 @@ export default function Home() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground italic">
-            Pending requests will appear here once you are registered and logged
-            in.
-          </p>
+          {isLoggedIn ? (
+            <p className="text-muted-foreground italic">
+              Loading pending requests... (Feature for later step)
+            </p>
+          ) : (
+            <p className="text-muted-foreground italic">
+              Please{" "}
+              <Button
+                variant="link"
+                className="p-0 h-auto"
+                onClick={() => router.push("/login")}
+              >
+                log in
+              </Button>{" "}
+              to see pending requests.
+            </p>
+          )}
         </CardContent>
       </Card>
-
-      {/* Original Next.js content can go here if you want to keep it */}
-      <div className="flex flex-col gap-4 items-center mt-8">
-        <p className="text-center text-muted-foreground">
-          Made by team SayWinners
-        </p>
-      </div>
     </div>
   );
 }
