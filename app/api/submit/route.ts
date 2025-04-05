@@ -5,7 +5,7 @@ import { getUsers, getRequests, saveRequests } from "@/lib/data-utils"; // Ensur
 import { User, Request as LoanRequest, RequestType } from "@/lib/types"; // Use LoanRequest alias, import RequestType
 
 // Define constants for approval logic (can be adjusted later)
-const APPROVAL_THRESHOLD_PERCENT = 0.8; // 80%
+const APPROVAL_THRESHOLD_PERCENT = 0.1; // 80%
 
 // Helper function to calculate required votes
 const calculateVotesRequired = (

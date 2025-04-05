@@ -1,43 +1,30 @@
 // app/api/requests/pending/route.ts
 import { NextResponse } from "next/server";
-import { getRequests, getUsers } from "@/lib/data-utils";
-import { User, Request as LoanRequest } from "@/lib/types";
-
-// Define the structure of the response object, including user name
-interface PendingRequestResponse extends LoanRequest {
-  requesterName: string; // Add the requester's name
-}
+import { getUsers, getRequests } from "@/lib/data-utils";
 
 export async function GET() {
-  console.log("API Pending Requests: Received GET request.");
   try {
-    const [requests, users] = await Promise.all([getRequests(), getUsers()]);
+    // Get all users and requests
+    const [users, requests] = await Promise.all([getUsers(), getRequests()]);
 
-    // Create a quick lookup map for user names
-    const userMap = new Map<string, string>();
-    users.forEach((user) => userMap.set(user.id, user.name));
+    // Filter to only pending requests
+    const pendingRequests = requests.filter((req) => req.status === "pending");
 
-    // Filter for pending requests and add requester's name
-    const pendingRequests: PendingRequestResponse[] = requests
-      .filter((req) => req.status === "pending")
-      .map((req) => ({
+    // Enhance requests with requester name
+    const enhancedRequests = pendingRequests.map((req) => {
+      const requester = users.find((user) => user.id === req.userId);
+      return {
         ...req,
-        // Add requester name, default to 'Unknown User' if not found (shouldn't happen ideally)
-        requesterName: userMap.get(req.userId) || "Unknown User",
-      }));
+        requesterName: requester ? requester.name : "Unknown User",
+      };
+    });
 
-    console.log(
-      `API Pending Requests: Found ${pendingRequests.length} pending requests.`
-    );
-
-    return NextResponse.json(pendingRequests, { status: 200 });
-  } catch (error: any) {
-    console.error(
-      "API Pending Requests: Error fetching pending requests:",
-      error
-    );
+    console.log(`API: Returning ${enhancedRequests.length} pending requests`);
+    return NextResponse.json(enhancedRequests);
+  } catch (error) {
+    console.error("API Error in pending requests:", error);
     return NextResponse.json(
-      { message: error.message || "Failed to fetch pending requests." },
+      { message: "Failed to fetch pending requests" },
       { status: 500 }
     );
   }

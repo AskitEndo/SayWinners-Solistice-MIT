@@ -1,18 +1,27 @@
 // components/Navbar.tsx
 "use client"; // This component will have client-side interaction
 
-import React, { useState } from "react";
+import React, { useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { LogOut, LogIn, UserPlus } from "lucide-react"; // Added UserPlus icon for registration
 import { useAuthStore } from "@/store/authStore"; // Import auth store
+import { useGlobalFundStore } from "@/store/globalFundStore"; // Import global fund store
 import { useRouter } from "next/navigation"; // Add router for navigation
 
 export const Navbar: React.FC = () => {
   const { isLoggedIn, user, logout } = useAuthStore();
-  const [globalFund] = useState(100000);
+  const { globalFund, fetchGlobalFund } = useGlobalFundStore();
   const router = useRouter();
+
+  // Fetch global fund on component mount
+  useEffect(() => {
+    fetchGlobalFund();
+    // Consider adding an interval refresh if you want real-time updates
+    // const intervalId = setInterval(fetchGlobalFund, 60000); // Refresh every minute
+    // return () => clearInterval(intervalId);
+  }, [fetchGlobalFund]);
 
   return (
     <nav className="bg-background/80 backdrop-blur border-b border-border sticky top-0 z-50 w-full font-nunito">
@@ -28,7 +37,7 @@ export const Navbar: React.FC = () => {
           <div className="text-sm hidden sm:block">
             <span className="text-muted-foreground">Global Fund:</span>{" "}
             <span className="font-semibold">
-              ₹{globalFund.toLocaleString("en-IN")}
+              ₹{globalFund?.toLocaleString("en-IN") ?? "Loading..."}
             </span>
           </div>
 

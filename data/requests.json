@@ -1,28 +1,49 @@
 [
   {
-    "id": "e2cebcfb-95f9-476a-9f33-13d5aed8911f",
-    "userId": "2b985c62-33d5-4b80-abd5-f4f2ec4e468c",
+    "id": "0a826790-491b-404e-a9e4-627b14466a8a",
+    "userId": "e11a35e7-4f57-4317-b08f-00f1d7fd8725",
     "type": "loan",
-    "title": "PESA DE",
-    "category": "Home Improvement",
-    "amount": 20,
-    "details": "chaiye bhai",
-    "status": "pending",
-    "createdAt": "2025-04-05T19:06:18.192Z",
-    "votesRequired": 2,
-    "approvedBy": [],
-    "rejectedBy": []
+    "title": "dededededed",
+    "category": "Debt Consolidation",
+    "amount": 11,
+    "details": "qwqw",
+    "status": "approved",
+    "createdAt": "2025-04-05T20:12:28.733Z",
+    "votesRequired": 0,
+    "approvedBy": [
+      "edda3bd4-77a4-46f7-9628-c399a1b520a2"
+    ],
+    "rejectedBy": [],
+    "processedAt": "2025-04-05T20:15:24.721Z"
   },
   {
-    "id": "de041eb9-1403-4514-96bb-37c8edffd523",
-    "userId": "2b985c62-33d5-4b80-abd5-f4f2ec4e468c",
+    "id": "cce09375-2ce1-4173-96ef-c267ca7072fa",
+    "userId": "e11a35e7-4f57-4317-b08f-00f1d7fd8725",
     "type": "deposit",
-    "amount": 1000000,
-    "details": "hi",
-    "status": "pending",
-    "createdAt": "2025-04-05T19:16:59.931Z",
-    "votesRequired": 2,
-    "approvedBy": [],
-    "rejectedBy": []
+    "amount": 10000000,
+    "details": "qq",
+    "status": "rejected",
+    "createdAt": "2025-04-05T20:21:40.106Z",
+    "votesRequired": 1,
+    "approvedBy": [
+      "edda3bd4-77a4-46f7-9628-c399a1b520a2"
+    ],
+    "rejectedBy": [],
+    "processedAt": "2025-04-05T20:22:04.770Z"
+  },
+  {
+    "id": "a4e51506-0734-49a6-93d7-413cf6e1d429",
+    "userId": "edda3bd4-77a4-46f7-9628-c399a1b520a2",
+    "type": "deposit",
+    "amount": 300,
+    "details": "qq",
+    "status": "approved",
+    "createdAt": "2025-04-05T20:22:31.990Z",
+    "votesRequired": 1,
+    "approvedBy": [
+      "e11a35e7-4f57-4317-b08f-00f1d7fd8725"
+    ],
+    "rejectedBy": [],
+    "processedAt": "2025-04-05T20:22:53.588Z"
   }
 ]

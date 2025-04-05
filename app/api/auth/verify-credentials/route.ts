@@ -3,24 +3,36 @@ import { getUsers } from "@/lib/data-utils";
 
 export async function POST(request: Request) {
   try {
-    const { name, userId } = await request.json(); // Changed from email to userId
+    const { name, userId } = await request.json();
 
     if (!name || !userId) {
       return NextResponse.json(
-        { message: "Name and user ID are required" }, // Updated error message
+        { message: "Name and user ID are required" },
         { status: 400 }
       );
     }
 
-    console.log("API Verify Credentials:", { name, userId }); // Log updated params
+    console.log("API Verify Credentials:", { name, userId });
 
     // Get all users from the server-side JSON file
     const users = await getUsers();
 
-    // Find matching user by name and ID instead of email
+    if (!Array.isArray(users)) {
+      console.error("Users data is not an array:", users);
+      return NextResponse.json(
+        { message: "Server data error" },
+        { status: 500 }
+      );
+    }
+
+    // Find matching user by name and ID with null checks
     const matchedUser = users.find(
       (user) =>
-        user.name.toLowerCase() === name.toLowerCase() && user.id === userId // Changed to check ID exactly (case-sensitive)
+        user &&
+        user.name &&
+        user.id &&
+        user.name.toLowerCase() === name.toLowerCase() &&
+        user.id === userId
     );
 
     console.log("Matched user:", matchedUser ? matchedUser.id : "Not found");

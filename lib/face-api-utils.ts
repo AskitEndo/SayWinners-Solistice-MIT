@@ -159,7 +159,7 @@ export const findUserByCredentials = async (
   userId: string
 ): Promise<any> => {
   try {
-    console.log("Fetching users from API for credential verification");
+    console.log("Sending credentials to API:", { name, userId });
 
     // Create a credential verification endpoint
     const response = await fetch("/api/auth/verify-credentials", {
@@ -167,7 +167,7 @@ export const findUserByCredentials = async (
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ name, userId }), // Changed from email to userId
+      body: JSON.stringify({ name, userId }),
     });
 
     if (!response.ok) {
