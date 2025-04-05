@@ -1,0 +1,28 @@
+[
+  {
+    "id": "e2cebcfb-95f9-476a-9f33-13d5aed8911f",
+    "userId": "2b985c62-33d5-4b80-abd5-f4f2ec4e468c",
+    "type": "loan",
+    "title": "PESA DE",
+    "category": "Home Improvement",
+    "amount": 20,
+    "details": "chaiye bhai",
+    "status": "pending",
+    "createdAt": "2025-04-05T19:06:18.192Z",
+    "votesRequired": 2,
+    "approvedBy": [],
+    "rejectedBy": []
+  },
+  {
+    "id": "de041eb9-1403-4514-96bb-37c8edffd523",
+    "userId": "2b985c62-33d5-4b80-abd5-f4f2ec4e468c",
+    "type": "deposit",
+    "amount": 1000000,
+    "details": "hi",
+    "status": "pending",
+    "createdAt": "2025-04-05T19:16:59.931Z",
+    "votesRequired": 2,
+    "approvedBy": [],
+    "rejectedBy": []
+  }
+]

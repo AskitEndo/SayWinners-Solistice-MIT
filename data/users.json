@@ -20,5 +20,16 @@
     "accountBalance": 10000,
     "registeredAt": "2025-04-05T18:49:32.893Z",
     "faceImagesCaptured": true
+  },
+  {
+    "id": "2b985c62-33d5-4b80-abd5-f4f2ec4e468c",
+    "name": "aa",
+    "email": "aa@aa.aa",
+    "age": 1,
+    "address": "aa",
+    "bankAccountNumber": "aa",
+    "accountBalance": 10000,
+    "registeredAt": "2025-04-05T19:05:22.726Z",
+    "faceImagesCaptured": true
   }
 ]
