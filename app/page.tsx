@@ -301,7 +301,7 @@ export default function HomePage() {
                         <summary className="cursor-pointer text-muted-foreground group-open:mb-1 list-none flex items-center">
                           <Info className="w-3 h-3 mr-1 inline" /> Details
                         </summary>
-                        <p className="pl-4 text-muted-foreground border-l-2 ml-1 pl-2">
+                        <p className="pl-4 text-muted-foreground border-l-2 ml-1 ">
                           {req.details}
                         </p>
                       </details>
