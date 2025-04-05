@@ -45,5 +45,23 @@
     ],
     "rejectedBy": [],
     "processedAt": "2025-04-05T20:22:53.588Z"
+  },
+  {
+    "id": "2207f6d6-2838-4d3a-b62f-16fe9c360305",
+    "userId": "0c8617fc-c166-4008-9f29-67d2275d5aa1",
+    "type": "loan",
+    "title": "dedo",
+    "category": "Wedding Expenses",
+    "amount": 650,
+    "details": "theek",
+    "status": "approved",
+    "createdAt": "2025-04-05T21:33:24.488Z",
+    "votesRequired": 2,
+    "approvedBy": [
+      "e11a35e7-4f57-4317-b08f-00f1d7fd8725",
+      "edda3bd4-77a4-46f7-9628-c399a1b520a2"
+    ],
+    "rejectedBy": [],
+    "processedAt": "2025-04-05T21:35:02.608Z"
   }
 ]
