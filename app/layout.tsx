@@ -3,6 +3,7 @@ import { Nunito } from "next/font/google";
 import { PT_Sans } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/Navbar";
+import { Footer } from "@/components/Footer";
 import { Toaster as Sonner } from "@/components/ui/sonner"; // Import Sonner Toaster
 
 const nunito = Nunito({
@@ -18,7 +19,7 @@ const ptSans = PT_Sans({
 
 export const metadata: Metadata = {
   title: "DhanSetu",
-  description: "P2P Emergecny Fund",
+  description: "P2P Emergency Fund",
 };
 
 export default function RootLayout({
@@ -36,7 +37,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${nunito.variable} ${ptSans.variable} antialiased relative bg-background text-foreground font-nunito`}
+        className={`${nunito.variable} ${ptSans.variable} antialiased relative bg-background text-foreground font-nunito min-h-screen flex flex-col`}
       >
         <div className="texture fixed inset-0 opacity-5 z-[-1]" />
         <Navbar
@@ -45,7 +46,10 @@ export default function RootLayout({
           userName={placeholderUserName}
           userBalance={placeholderUserBalance}
         />
-        <main className="container mx-auto px-4 py-8">{children}</main>
+        <main className="container mx-auto px-4 py-8 flex-grow">
+          {children}
+        </main>
+        <Footer />
         <Sonner richColors closeButton /> {/* Add Sonner Toaster here */}
       </body>
     </html>
