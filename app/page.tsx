@@ -294,7 +294,7 @@ export default function HomePage() {
       const response = await fetch("/api/requests/vote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requestId, voteType, voterId: user.id }),
+        body: JSON.stringify({ requestId, voteType, userId: user.id }), // Changed from voterId to userId
       });
 
       const result = await response.json();

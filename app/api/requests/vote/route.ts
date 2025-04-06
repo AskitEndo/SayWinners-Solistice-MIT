@@ -13,9 +13,9 @@ import {
   sendRequestOutcomeNotification,
 } from "@/lib/email-utils";
 
-export async function POST(request: Request) {
+export async function POST(req: Request) {
   try {
-    const data = await request.json();
+    const data = await req.json();
     const { requestId, userId, voteType } = data;
 
     if (!requestId || !userId || !voteType) {
@@ -40,10 +40,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Request not found" }, { status: 404 });
     }
 
-    const request = requests[requestIndex];
+    const requestItem = requests[requestIndex];
 
     // Check if request is still pending
-    if (request.status !== "pending") {
+    if (requestItem.status !== "pending") {
       return NextResponse.json(
         { error: "Cannot vote on a request that is not pending" },
         { status: 400 }
@@ -52,8 +52,8 @@ export async function POST(request: Request) {
 
     // Check if user has already voted
     if (
-      request.approvedBy.includes(userId) ||
-      request.rejectedBy.includes(userId)
+      requestItem.approvedBy.includes(userId) ||
+      requestItem.rejectedBy.includes(userId)
     ) {
       return NextResponse.json(
         { error: "User has already voted on this request" },
@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     }
 
     // Check if user is voting on their own request
-    if (request.userId === userId) {
+    if (requestItem.userId === userId) {
       return NextResponse.json(
         { error: "Users cannot vote on their own requests" },
         { status: 400 }
@@ -71,15 +71,15 @@ export async function POST(request: Request) {
 
     // Record the vote
     if (voteType === "approve") {
-      request.approvedBy.push(userId);
+      requestItem.approvedBy.push(userId);
     } else if (voteType === "reject") {
-      request.rejectedBy.push(userId);
+      requestItem.rejectedBy.push(userId);
     } else {
       return NextResponse.json({ error: "Invalid vote type" }, { status: 400 });
     }
 
     // Find requester for notification
-    const requester = users.find((user) => user.id === request.userId);
+    const requester = users.find((user) => user.id === requestItem.userId);
     if (!requester) {
       return NextResponse.json(
         { error: "Requester not found" },
@@ -91,7 +91,7 @@ export async function POST(request: Request) {
     try {
       await sendVoteReceivedNotification(
         requester,
-        request,
+        requestItem,
         voter.name,
         voteType
       );
@@ -101,26 +101,27 @@ export async function POST(request: Request) {
     }
 
     // Check if request should be approved or rejected
-    const totalVotes = request.approvedBy.length + request.rejectedBy.length;
+    const totalVotes =
+      requestItem.approvedBy.length + requestItem.rejectedBy.length;
     const eligibleVoters = users.length - 1; // exclude requester
 
     // Logic to determine if the request has received enough votes
-    if (request.approvedBy.length >= request.votesRequired) {
+    if (requestItem.approvedBy.length >= requestItem.votesRequired) {
       // Mark request as approved
-      request.status = "approved";
-      request.processedAt = new Date().toISOString();
+      requestItem.status = "approved";
+      requestItem.processedAt = new Date().toISOString();
 
       // Update balances for loan/deposit
       const globalState = await getGlobalState();
 
-      if (request.type === "loan") {
+      if (requestItem.type === "loan") {
         // For loan: add money to requester, remove from global fund
-        requester.accountBalance += request.amount;
-        globalState.totalFund -= request.amount;
-      } else if (request.type === "deposit") {
+        requester.accountBalance += requestItem.amount;
+        globalState.totalFund -= requestItem.amount;
+      } else if (requestItem.type === "deposit") {
         // For deposit: remove money from requester, add to global fund
-        requester.accountBalance -= request.amount;
-        globalState.totalFund += request.amount;
+        requester.accountBalance -= requestItem.amount;
+        globalState.totalFund += requestItem.amount;
       }
 
       // Save updated user and global state
@@ -129,26 +130,26 @@ export async function POST(request: Request) {
 
       // Log transaction
       await logTransaction(
-        request.id,
-        request.type,
+        requestItem.id,
+        requestItem.type,
         requester.id,
-        request.amount,
+        requestItem.amount,
         true
       );
 
       // Send status update email to requester
       try {
-        await sendRequestStatusUpdateNotification(requester, request);
+        await sendRequestStatusUpdateNotification(requester, requestItem);
         console.log(`Request approval notification sent to ${requester.email}`);
 
         // Send outcome emails to voters
-        const voters = [...request.approvedBy, ...request.rejectedBy];
+        const voters = [...requestItem.approvedBy, ...requestItem.rejectedBy];
         for (const voterId of voters) {
           const voter = users.find((u) => u.id === voterId);
           if (voter && voter.id !== requester.id) {
             await sendRequestOutcomeNotification(
               voter,
-              request,
+              requestItem,
               requester.name
             );
           }
@@ -157,37 +158,37 @@ export async function POST(request: Request) {
         console.error("Error sending approval emails:", emailError);
       }
     } else if (
-      request.rejectedBy.length >
-      eligibleVoters - request.votesRequired
+      requestItem.rejectedBy.length >
+      eligibleVoters - requestItem.votesRequired
     ) {
       // Not enough possible approving votes left to reach threshold
-      request.status = "rejected";
-      request.processedAt = new Date().toISOString();
+      requestItem.status = "rejected";
+      requestItem.processedAt = new Date().toISOString();
 
       // Log transaction (failed)
       await logTransaction(
-        request.id,
-        request.type,
+        requestItem.id,
+        requestItem.type,
         requester.id,
-        request.amount,
+        requestItem.amount,
         false
       );
 
       // Send status update email to requester
       try {
-        await sendRequestStatusUpdateNotification(requester, request);
+        await sendRequestStatusUpdateNotification(requester, requestItem);
         console.log(
           `Request rejection notification sent to ${requester.email}`
         );
 
         // Send outcome emails to voters
-        const voters = [...request.approvedBy, ...request.rejectedBy];
+        const voters = [...requestItem.approvedBy, ...requestItem.rejectedBy];
         for (const voterId of voters) {
           const voter = users.find((u) => u.id === voterId);
           if (voter && voter.id !== requester.id) {
             await sendRequestOutcomeNotification(
               voter,
-              request,
+              requestItem,
               requester.name
             );
           }
@@ -202,7 +203,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      request: request,
+      request: requestItem,
     });
   } catch (error) {
     console.error("Vote processing error:", error);

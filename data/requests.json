@@ -1,1 +1,30 @@
-[]
+[
+  {
+    "id": "7a19eec3-90fc-4a0d-a00b-1cc017ebf087",
+    "userId": "f6f32708-a1bf-4d5d-bc1f-e80ce9ed3601",
+    "type": "deposit",
+    "amount": 5000,
+    "details": "need ful",
+    "status": "pending",
+    "createdAt": "2025-04-06T07:26:25.133Z",
+    "votesRequired": 1,
+    "approvedBy": [],
+    "rejectedBy": []
+  },
+  {
+    "id": "4d488748-3f10-40c3-b683-32b501a1c7fc",
+    "userId": "2bfde715-23e9-41f4-b495-e26d2fe24b1d",
+    "type": "loan",
+    "title": "Emergency",
+    "category": "Debt Consolidation",
+    "amount": 121213,
+    "details": "family issue",
+    "status": "pending",
+    "createdAt": "2025-04-06T07:28:55.976Z",
+    "votesRequired": 3,
+    "approvedBy": [],
+    "rejectedBy": [
+      "414bb137-7ec6-4ccc-ae44-bee480752c6b"
+    ]
+  }
+]

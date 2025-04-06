@@ -1,1 +1,57 @@
-[]
+[
+  {
+    "id": "5b6e74e0-9ec9-48d7-9955-dc2a5b3948dd",
+    "name": "Ankit Kumar Singh",
+    "email": "animatedaskit5459@gmail.com",
+    "age": 21,
+    "address": "Plot no.10th E,7th cross,KG halli, Jalahalli West, Bangalore,560015",
+    "bankAccountNumber": "131313",
+    "accountBalance": 10000,
+    "registeredAt": "2025-04-06T07:24:56.803Z",
+    "faceImagesCaptured": true
+  },
+  {
+    "id": "f6f32708-a1bf-4d5d-bc1f-e80ce9ed3601",
+    "name": "as",
+    "email": "asa",
+    "age": 12,
+    "address": "121212",
+    "bankAccountNumber": "1212",
+    "accountBalance": 10000,
+    "registeredAt": "2025-04-06T07:25:27.304Z",
+    "faceImagesCaptured": true
+  },
+  {
+    "id": "b720525c-8453-4152-9517-ed7d17cba5d0",
+    "name": "sa",
+    "email": "sa",
+    "age": 2,
+    "address": "Plot no.10th E,7th cross,KG halli, Jalahalli West, Bangalore,560015",
+    "bankAccountNumber": "sa",
+    "accountBalance": 10000,
+    "registeredAt": "2025-04-06T07:27:04.460Z",
+    "faceImagesCaptured": true
+  },
+  {
+    "id": "2bfde715-23e9-41f4-b495-e26d2fe24b1d",
+    "name": "aa",
+    "email": "aa",
+    "age": 11,
+    "address": "aa",
+    "bankAccountNumber": "aa",
+    "accountBalance": 10000,
+    "registeredAt": "2025-04-06T07:27:56.497Z",
+    "faceImagesCaptured": true
+  },
+  {
+    "id": "414bb137-7ec6-4ccc-ae44-bee480752c6b",
+    "name": "Rahul",
+    "email": "askit11911920@gmail.com",
+    "age": 24,
+    "address": "Plot no.10th E,7th cross,KG halli, Jalahalli West, Bangalore,560015",
+    "bankAccountNumber": "131313",
+    "accountBalance": 10000,
+    "registeredAt": "2025-04-06T07:54:58.147Z",
+    "faceImagesCaptured": true
+  }
+]
