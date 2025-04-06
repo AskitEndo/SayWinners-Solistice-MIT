@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -20,20 +20,68 @@ import { useGlobalFundStore } from "@/store/globalFundStore";
 import { FaceVerification } from "@/components/FaceVerification";
 import { Request as LoanRequest } from "@/lib/types";
 import { toast } from "sonner";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw, IndianRupee } from "lucide-react";
 import { LoanRequestCard } from "@/components/LoanRequestCard";
+import { motion, useScroll, useTransform } from "framer-motion";
 
 // Define the extended type received from the API
 interface PendingRequestResponse extends LoanRequest {
   requesterName: string;
 }
 
+// Component for animated number display
+const AnimatedNumber = ({ value }: { value: number }) => {
+  const [animatedValue, setAnimatedValue] = useState("0");
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  useEffect(() => {
+    if (!value) return;
+
+    // Start with random shuffling
+    setIsAnimating(true);
+
+    // Generate random digits for shuffling effect
+    const randomizeDigits = () => {
+      return Array.from({ length: String(value).length })
+        .map(() => Math.floor(Math.random() * 10))
+        .join("");
+    };
+
+    let iterations = 0;
+    const maxIterations = 20; // Number of random shuffles
+
+    const shuffleInterval = setInterval(() => {
+      if (iterations < maxIterations) {
+        setAnimatedValue(randomizeDigits());
+        iterations++;
+      } else {
+        // End with the actual value
+        setAnimatedValue(String(value));
+        setIsAnimating(false);
+        clearInterval(shuffleInterval);
+      }
+    }, 50);
+
+    return () => clearInterval(shuffleInterval);
+  }, [value]);
+
+  return (
+    <span
+      className={`font-mono transition-all ${
+        isAnimating ? "text-primary/80" : "text-primary"
+      }`}
+    >
+      ₹{animatedValue.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+    </span>
+  );
+};
+
 export default function HomePage() {
   // Use separate selectors to avoid infinite loop issue
   const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
   const user = useAuthStore((state) => state.user);
 
-  // Use the global fund store instead of local state
+  // Use the global fund store
   const {
     globalFund,
     isLoading: isLoadingFund,
@@ -42,6 +90,68 @@ export default function HomePage() {
 
   const router = useRouter();
   const [showVerification, setShowVerification] = useState(false);
+
+  // Animation states
+  const [pageLoaded, setPageLoaded] = useState(false);
+  const [hoveredButton, setHoveredButton] = useState<string | null>(null);
+
+  // SVG animation ref and state
+  const svgRef = useRef<HTMLDivElement>(null);
+  const [svgRotation, setSvgRotation] = useState(0);
+
+  // Refs for scroll snapping
+  const containerRef = useRef<HTMLDivElement>(null);
+  const section1Ref = useRef<HTMLDivElement>(null);
+  const section2Ref = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll logic
+  useEffect(() => {
+    const handleScroll = () => {
+      if (!containerRef.current) return;
+
+      const scrollTop = window.scrollY;
+      const windowHeight = window.innerHeight;
+      const section1Top = section1Ref.current?.offsetTop || 0;
+      const section2Top = section2Ref.current?.offsetTop || 0;
+
+      // Threshold for snapping (percentage of section height)
+      const threshold = windowHeight * 0.3;
+
+      // Snap to section 1 (Numbers)
+      if (scrollTop > 0 && scrollTop < threshold) {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+
+      // Snap to section 2 (Hero)
+      if (scrollTop > section1Top + threshold && scrollTop < section2Top) {
+        window.scrollTo({ top: section2Top, behavior: "smooth" });
+      }
+
+      // If scrolled past section 2, snap to it
+      if (scrollTop > section2Top - threshold && scrollTop < section2Top) {
+        window.scrollTo({ top: section2Top, behavior: "smooth" });
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, []);
+
+  // Effect to handle SVG rotation - more subtle now
+  useEffect(() => {
+    if (hoveredButton === "deposit") {
+      // Rotate clockwise when deposit button is hovered - more subtle
+      setSvgRotation(6); // 6 degrees clockwise (reduced from 15)
+    } else if (hoveredButton === "borrow") {
+      // Rotate counter-clockwise when borrow button is hovered - more subtle
+      setSvgRotation(-6); // -6 degrees counter-clockwise (reduced from -15)
+    } else {
+      // Reset rotation when no button is hovered
+      setSvgRotation(0);
+    }
+  }, [hoveredButton]);
 
   // State for pending requests and voting
   const [pendingRequests, setPendingRequests] = useState<
@@ -86,6 +196,8 @@ export default function HomePage() {
   // Fetch on initial load/login state change
   useEffect(() => {
     fetchGlobalFund();
+    // Set page loaded after a small delay to trigger animations
+    setTimeout(() => setPageLoaded(true), 500);
   }, [fetchGlobalFund]);
 
   useEffect(() => {
@@ -153,132 +265,274 @@ export default function HomePage() {
   };
 
   return (
-    <div className="space-y-8">
-      {/* Global Fund Display (Card) */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Platform Status</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoadingFund ? (
-            <Skeleton className="h-6 w-48" />
-          ) : (
-            <p className="text-lg">
-              Current Global Fund:{" "}
-              <span className="font-semibold">
-                ₹{globalFund?.toLocaleString("en-IN") ?? "N/A"}
-              </span>
-            </p>
-          )}
-        </CardContent>
-      </Card>
+    <div
+      ref={containerRef}
+      className="snap-y snap-mandatory h-screen overflow-y-auto"
+    >
+      {/* Global Fund Display - Full Screen Hero Section */}
+      <div
+        ref={section1Ref}
+        className="h-screen w-full snap-start flex flex-col items-center justify-center relative bg-gradient-to-b from-background to-primary/5"
+      >
+        <motion.div
+          className="flex flex-col items-center justify-center px-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 1 }}
+        >
+          {/* Number Display - increased size with constraints to keep in frame */}
+          <motion.div
+            className="text-[8.5rem] md:text-[10rem] lg:text-[12rem] leading-none font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent max-w-[95vw] overflow-hidden"
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.4, duration: 0.8 }}
+          >
+            {isLoadingFund ? (
+              <Skeleton className="h-48 w-96" />
+            ) : (
+              <div className="px-2 text-center">
+                <AnimatedNumber value={globalFund || 0} />
+              </div>
+            )}
+          </motion.div>
 
-      {/* Action Buttons (Card) */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Get Started</CardTitle>
-          <CardDescription>
-            {isLoggedIn
-              ? `Welcome back, ${user?.name}! Choose an action.`
-              : "Log in or verify your identity to participate."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col sm:flex-row gap-4">
-          <Button
-            size="lg"
-            className="flex-1"
-            onClick={() => handleActionClick("borrow")}
+          {/* "COLLECTED SO FAR" text */}
+          <motion.p
+            className="text-muted-foreground text-lg md:text-xl mt-4 tracking-widest uppercase font-light"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1, duration: 0.6 }}
           >
-            Borrow Money
-          </Button>
-          <Button
-            size="lg"
-            variant="outline"
-            className="flex-1"
-            onClick={() => handleActionClick("deposit")}
+            Collected So Far
+          </motion.p>
+
+          {/* Scroll indicator */}
+          <motion.div
+            className="absolute bottom-10"
+            animate={{ y: [0, 10, 0] }}
+            transition={{ repeat: Infinity, duration: 1.5 }}
           >
-            Deposit Money
-          </Button>
-          {!isLoggedIn && (
+            <p className="text-muted-foreground text-sm">Scroll Down</p>
+            <div className="mt-2 w-6 h-10 border-2 border-muted-foreground rounded-full mx-auto flex justify-center">
+              <motion.div
+                className="w-2 h-2 bg-primary rounded-full"
+                animate={{ y: [0, 15, 0] }}
+                transition={{ repeat: Infinity, duration: 1.5 }}
+              />
+            </div>
+          </motion.div>
+        </motion.div>
+      </div>
+
+      {/* Hero Section with Character - Full Screen */}
+      <div
+        ref={section2Ref}
+        className="h-screen w-full snap-start relative overflow-hidden bg-blue-50/5"
+      >
+        {/* Main SVG with rotation animation - more subtle */}
+        <motion.div
+          ref={svgRef}
+          className="absolute inset-0 flex items-center justify-center"
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{
+            opacity: 1,
+            scale: 1,
+            rotate: svgRotation,
+            y: hoveredButton ? -10 : 0, // Move SVG up slightly when buttons are hovered (reduced from -20)
+          }}
+          transition={{
+            duration: 0.7,
+            rotate: { type: "spring", stiffness: 150, damping: 20 }, // More dampened spring
+          }}
+        >
+          <div className="relative w-full h-full translate-y-[8%]">
+            {/* Move SVG down slightly more */}
+            <Image
+              src="/images/compare.svg"
+              alt="DhanSetu Hero"
+              fill
+              className="object-contain"
+              priority
+            />
+          </div>
+        </motion.div>
+
+        {/* Action buttons - moved closer to edges */}
+        <div className="absolute inset-0 flex items-center justify-between px-12 md:px-24">
+          <motion.div
+            animate={{
+              x: hoveredButton === "deposit" ? -8 : 0, // Reduced from -15
+              y: hoveredButton === "deposit" ? -8 : 0, // Reduced from -15
+              scale: hoveredButton === "deposit" ? 1.08 : 1, // Reduced from 1.2
+            }}
+            transition={{ type: "spring", stiffness: 250, damping: 15 }}
+          >
             <Button
               size="lg"
-              variant="secondary"
-              className="flex-1"
-              onClick={() => setShowVerification(true)}
+              variant="outline"
+              className="text-md px-5 py-6 bg-background/80 backdrop-blur-sm border-2 border-primary/30 hover:border-primary hover:bg-primary/5 shadow-md"
+              onClick={() => handleActionClick("deposit")}
+              onMouseEnter={() => setHoveredButton("deposit")}
+              onMouseLeave={() => setHoveredButton(null)}
             >
-              Login / Verify Identity
+              <IndianRupee className="mr-2 h-4 w-4" />
+              Deposit Money
             </Button>
-          )}
-        </CardContent>
-      </Card>
+          </motion.div>
 
-      {/* Pending Approvals Section (Card) - Updated */}
-      <Card>
-        <CardHeader>
-          <div className="flex justify-between items-center">
-            <div>
-              <CardTitle>Pending Community Approvals</CardTitle>
-              <CardDescription>
-                Review and vote on loan and deposit requests.
-              </CardDescription>
-            </div>
-            {isLoggedIn && (
+          <motion.div
+            animate={{
+              x: hoveredButton === "borrow" ? 8 : 0, // Reduced from 15
+              y: hoveredButton === "borrow" ? -8 : 0, // Reduced from -15
+              scale: hoveredButton === "borrow" ? 1.08 : 1, // Reduced from 1.2
+            }}
+            transition={{ type: "spring", stiffness: 250, damping: 15 }}
+          >
+            <Button
+              size="lg"
+              className="text-md px-5 py-6 bg-primary shadow-md hover:bg-primary/90"
+              onClick={() => handleActionClick("borrow")}
+              onMouseEnter={() => setHoveredButton("borrow")}
+              onMouseLeave={() => setHoveredButton(null)}
+            >
+              Borrow Money
+            </Button>
+          </motion.div>
+        </div>
+
+        {/* Login/Verify button for non-logged in users */}
+        {!isLoggedIn && (
+          <div className="absolute bottom-8 w-full flex justify-center">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.8 }}
+            >
               <Button
-                variant="ghost"
-                size="icon"
-                onClick={fetchPendingRequests}
-                disabled={isLoadingRequests}
-                title="Refresh Requests"
+                size="lg"
+                variant="secondary"
+                className="text-md px-6 py-5 bg-background/70 backdrop-blur-sm shadow-md"
+                onClick={() => setShowVerification(true)}
               >
-                <RefreshCw
-                  className={`h-4 w-4 ${
-                    isLoadingRequests ? "animate-spin" : ""
-                  }`}
-                />
+                Login / Verify Identity
               </Button>
-            )}
+            </motion.div>
           </div>
-        </CardHeader>
-        <CardContent>
-          {!isLoggedIn ? (
-            <p className="text-muted-foreground italic text-center py-4">
-              Please log in to view and vote on pending requests.
-            </p>
-          ) : isLoadingRequests ? (
-            <div className="space-y-4">
-              <Skeleton className="h-28 w-full" />
-              <Skeleton className="h-28 w-full" />
-            </div>
-          ) : pendingRequests.length === 0 ? (
-            <p className="text-muted-foreground italic text-center py-4">
-              No pending requests requiring approval right now.
-            </p>
-          ) : (
-            <div className="space-y-4">
-              {pendingRequests.map((req) => {
-                const isOwnRequest = user?.id === req.userId;
-                const hasVoted =
-                  req.approvedBy.includes(user?.id || "") ||
-                  req.rejectedBy.includes(user?.id || "");
-                const canVote = isLoggedIn && !isOwnRequest && !hasVoted;
-                const isVoting = votingState[req.id];
+        )}
+      </div>
 
-                return (
-                  <LoanRequestCard
-                    key={req.id}
-                    request={req}
-                    isVoting={isVoting}
-                    canVote={canVote}
-                    isOwnRequest={isOwnRequest}
-                    hasVoted={hasVoted}
-                    onVote={handleVote}
-                  />
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* Pending Approvals Section (Card) */}
+      <div className="min-h-screen w-full snap-start py-20 bg-gradient-to-b from-primary/5 to-background">
+        <div className="container mx-auto px-4">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7 }}
+            viewport={{ once: true }}
+            className="mb-8"
+          >
+            <h2 className="text-4xl md:text-5xl font-bold text-center mb-4 bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+              Community Approvals
+            </h2>
+            <p className="text-xl text-center text-muted-foreground max-w-2xl mx-auto">
+              Review and vote on loan and deposit requests from members of our
+              community.
+            </p>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 40 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.2 }}
+            viewport={{ once: true }}
+          >
+            <Card className="border-2 border-primary/10 shadow-xl">
+              <CardHeader className="border-b border-border/30">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle className="text-2xl">Pending Requests</CardTitle>
+                    <CardDescription className="text-lg">
+                      Your vote matters in deciding who receives help.
+                    </CardDescription>
+                  </div>
+                  {isLoggedIn && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={fetchPendingRequests}
+                      disabled={isLoadingRequests}
+                      title="Refresh Requests"
+                    >
+                      <RefreshCw
+                        className={`h-5 w-5 ${
+                          isLoadingRequests ? "animate-spin" : ""
+                        }`}
+                      />
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="p-6">
+                {!isLoggedIn ? (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.5 }}
+                    className="text-center py-16"
+                  >
+                    <p className="text-xl text-muted-foreground italic mb-8">
+                      Please log in to view and vote on pending requests.
+                    </p>
+                    <Button size="lg" onClick={() => setShowVerification(true)}>
+                      Login / Verify Identity
+                    </Button>
+                  </motion.div>
+                ) : isLoadingRequests ? (
+                  <div className="space-y-6 py-4">
+                    <Skeleton className="h-40 w-full" />
+                    <Skeleton className="h-40 w-full" />
+                  </div>
+                ) : pendingRequests.length === 0 ? (
+                  <div className="text-center py-16">
+                    <p className="text-xl text-muted-foreground italic">
+                      No pending requests requiring approval right now.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {pendingRequests.map((req, index) => {
+                      const isOwnRequest = user?.id === req.userId;
+                      const hasVoted =
+                        req.approvedBy.includes(user?.id || "") ||
+                        req.rejectedBy.includes(user?.id || "");
+                      const canVote = isLoggedIn && !isOwnRequest && !hasVoted;
+                      const isVoting = votingState[req.id];
+
+                      return (
+                        <motion.div
+                          key={req.id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.1, duration: 0.5 }}
+                        >
+                          <LoanRequestCard
+                            request={req}
+                            isVoting={isVoting}
+                            canVote={canVote}
+                            isOwnRequest={isOwnRequest}
+                            hasVoted={hasVoted}
+                            onVote={handleVote}
+                          />
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        </div>
+      </div>
 
       {/* Verification Modal */}
       <FaceVerification

@@ -18,60 +18,92 @@ import {
 } from "lucide-react"; // Add these imports
 import { useAuthStore } from "@/store/authStore"; // Import auth store
 import { useGlobalFundStore } from "@/store/globalFundStore"; // Import global fund store
-import { useRouter } from "next/navigation"; // Add router for navigation
+import { useRouter, usePathname } from "next/navigation"; // Add pathname
 
 export const Navbar: React.FC = () => {
   const { isLoggedIn, user, logout } = useAuthStore();
   const { globalFund, fetchGlobalFund } = useGlobalFundStore();
   const router = useRouter();
+  const pathname = usePathname();
+
+  // Format number in Indian style for the navbar display
+  const formatIndianNumber = (num: number) => {
+    let result = "";
+    const numStr = num.toString();
+    const length = numStr.length;
+
+    if (length <= 3) {
+      return numStr;
+    }
+
+    result = numStr.substring(length - 3);
+
+    let remaining = numStr.substring(0, length - 3);
+    while (remaining.length > 0) {
+      const chunk = remaining.substring(Math.max(0, remaining.length - 2));
+      result = chunk + "," + result;
+      remaining = remaining.substring(0, Math.max(0, remaining.length - 2));
+    }
+
+    return result;
+  };
 
   // Fetch global fund on component mount
   useEffect(() => {
     fetchGlobalFund();
-    // Consider adding an interval refresh if you want real-time updates
-    // const intervalId = setInterval(fetchGlobalFund, 60000); // Refresh every minute
-    // return () => clearInterval(intervalId);
   }, [fetchGlobalFund]);
+
+  // Handle logo click - scroll to top with animation
+  const handleLogoClick = (e: React.MouseEvent) => {
+    if (pathname === "/") {
+      e.preventDefault();
+
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
+
+      fetchGlobalFund();
+    }
+  };
 
   return (
     <nav className="bg-background/80 backdrop-blur border-b-2 border-border sticky top-0 z-50 w-full font-nunito relative overflow-hidden shadow-sm">
       {/* Background Icons */}
       <div className="absolute inset-0 opacity-10 pointer-events-none filter blur-[1px]">
-        {/* Keep existing icon positions but update their styling */}
         <Coins className="absolute top-2 left-8 w-4 h-4 text-primary/60" />
         <Building2 className="absolute top-3 left-32 w-4 h-4 text-primary/60" />
         <ChainLink className="absolute top-2 left-56 w-4 h-4 text-primary/60" />
         <Wallet className="absolute bottom-2 left-16 w-4 h-4 text-primary/60" />
         <IndianRupee className="absolute bottom-3 left-40 w-4 h-4 text-primary/60" />
 
-        {/* Left-Center section - Adjusted positioning */}
         <Building2 className="absolute top-2 left-[25%] w-4 h-4 text-primary/60" />
         <Coins className="absolute bottom-2 left-[30%] w-4 h-4 text-primary/60" />
         <ChainLink className="absolute top-3 left-[35%] w-4 h-4 text-primary/60" />
 
-        {/* Center section - Using percentages */}
         <Building2 className="absolute top-2 left-[45%] w-4 h-4 text-primary/60" />
         <Coins className="absolute bottom-2 left-[50%] w-4 h-4 -translate-x-1/2 text-primary/60" />
         <Wallet className="absolute top-3 left-[55%] w-4 h-4 text-primary/60" />
 
-        {/* Right-Center section */}
         <IndianRupee className="absolute top-2 right-[35%] w-4 h-4 text-primary/60" />
         <Building2 className="absolute bottom-2 right-[30%] w-4 h-4 text-primary/60" />
         <ChainLink className="absolute top-3 right-[25%] w-4 h-4 text-primary/60" />
 
-        {/* Right section */}
         <Wallet className="absolute top-2 right-8 w-4 h-4 text-primary/60" />
         <Coins className="absolute bottom-2 right-32 w-4 h-4 text-primary/60" />
         <IndianRupee className="absolute top-3 right-56 w-4 h-4 text-primary/60" />
 
-        {/* Middle scattered icons */}
         <Building2 className="absolute top-1/2 left-[20%] w-4 h-4 -translate-y-1/2 text-primary/60" />
         <ChainLink className="absolute top-1/2 right-[20%] w-4 h-4 -translate-y-1/2 text-primary/60" />
       </div>
 
       <div className="container mx-auto px-4 h-16 flex items-center justify-between relative z-10">
         {/* Left Side - Logo & App Name */}
-        <Link href="/" className="flex items-center gap-3 group">
+        <Link
+          href="/"
+          className="flex items-center gap-3 group"
+          onClick={handleLogoClick}
+        >
           <Image
             src="/images/logo.svg"
             alt="DhanSetu Logo"
@@ -98,13 +130,11 @@ export const Navbar: React.FC = () => {
           <div className="hidden sm:flex items-center gap-3">
             {/* Fund Display Container */}
             <div
-              className={`
-              flex items-center rounded-lg overflow-hidden
+              className={`flex items-center rounded-lg overflow-hidden
               bg-background/40 backdrop-blur-sm border border-border/80
               shadow-[0_2px_8px_rgba(0,0,0,0.1)]
               transition-all duration-300 ease-in-out
-              ${isLoggedIn ? "px-4 py-2" : "px-3 py-1.5"}
-            `}
+              ${isLoggedIn ? "px-4 py-2" : "px-3 py-1.5"}`}
             >
               {/* Global Fund Section */}
               <div className="flex items-center gap-1.5">
@@ -114,7 +144,8 @@ export const Navbar: React.FC = () => {
                     Global Fund
                   </span>
                   <span className="font-semibold text-xs text-foreground">
-                    ₹{globalFund?.toLocaleString("en-IN") ?? "Loading..."}
+                    ₹
+                    {globalFund ? formatIndianNumber(globalFund) : "Loading..."}
                   </span>
                 </div>
               </div>
@@ -135,7 +166,7 @@ export const Navbar: React.FC = () => {
                         My Balance
                       </span>
                       <span className="font-semibold text-xs text-foreground">
-                        ₹{user?.accountBalance.toLocaleString("en-IN")}
+                        ₹{user ? formatIndianNumber(user.accountBalance) : "0"}
                       </span>
                     </div>
                   </div>
