@@ -20,7 +20,8 @@ import { useGlobalFundStore } from "@/store/globalFundStore";
 import { FaceVerification } from "@/components/FaceVerification";
 import { Request as LoanRequest } from "@/lib/types";
 import { toast } from "sonner";
-import { Loader2, ThumbsUp, ThumbsDown, Info, RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
+import { LoanRequestCard } from "@/components/LoanRequestCard";
 
 // Define the extended type received from the API
 interface PendingRequestResponse extends LoanRequest {
@@ -260,109 +261,18 @@ export default function HomePage() {
                   req.approvedBy.includes(user?.id || "") ||
                   req.rejectedBy.includes(user?.id || "");
                 const canVote = isLoggedIn && !isOwnRequest && !hasVoted;
-                const isVoting = votingState[req.id]; // Check if voting is in progress for this req
-
-                const approvedVotes = req.approvedBy.length;
-                const rejectedVotes = req.rejectedBy.length;
-                const votesNeeded = req.votesRequired;
+                const isVoting = votingState[req.id];
 
                 return (
-                  <Card key={req.id} className="border shadow-sm">
-                    <CardHeader className="flex flex-row justify-between items-start pb-3">
-                      <div>
-                        <CardTitle className="text-base font-semibold mb-1 line-clamp-1">
-                          {req.type === "loan" ? req.title : "Deposit Request"}
-                        </CardTitle>
-                        <CardDescription className="text-xs">
-                          By: {req.requesterName} | Req ID: ...
-                          {req.id.slice(-6)}
-                        </CardDescription>
-                      </div>
-                      <Badge
-                        variant={req.type === "loan" ? "default" : "secondary"}
-                        className="capitalize text-xs h-5"
-                      >
-                        {req.type}
-                      </Badge>
-                    </CardHeader>
-                    <CardContent className="space-y-2 pb-3 text-sm">
-                      {req.type === "loan" && req.category && (
-                        <p>
-                          <span className="font-medium">Category:</span>{" "}
-                          {req.category}
-                        </p>
-                      )}
-                      <p>
-                        <span className="font-medium">Amount:</span> ₹
-                        {req.amount.toLocaleString("en-IN")}
-                      </p>
-                      <Separator className="my-1" />
-                      <details className="group text-xs">
-                        <summary className="cursor-pointer text-muted-foreground group-open:mb-1 list-none flex items-center">
-                          <Info className="w-3 h-3 mr-1 inline" /> Details
-                        </summary>
-                        <p className="pl-4 text-muted-foreground border-l-2 ml-1 ">
-                          {req.details}
-                        </p>
-                      </details>
-                      <Separator className="my-1" />
-                      <div className="text-xs text-muted-foreground flex justify-between items-center">
-                        <span>
-                          Votes: {approvedVotes} 👍 / {rejectedVotes} 👎
-                        </span>
-                        <span>
-                          {votesNeeded > 0
-                            ? `(${approvedVotes}/${votesNeeded} needed)`
-                            : "(No votes needed)"}
-                        </span>
-                      </div>
-                    </CardContent>
-                    {/* --- Voting Footer --- */}
-                    {canVote && (
-                      <CardFooter className="flex justify-end gap-2 bg-muted/50 py-2 px-3">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-red-500 text-red-600 hover:bg-red-50 hover:text-red-700 h-7 px-2"
-                          onClick={() => handleVote(req.id, "reject")}
-                          disabled={isVoting}
-                        >
-                          {isVoting ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : (
-                            <ThumbsDown className="mr-1 h-3 w-3" />
-                          )}{" "}
-                          Reject
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700 h-7 px-2"
-                          onClick={() => handleVote(req.id, "approve")}
-                          disabled={isVoting}
-                        >
-                          {isVoting ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : (
-                            <ThumbsUp className="mr-1 h-3 w-3" />
-                          )}{" "}
-                          Approve
-                        </Button>
-                      </CardFooter>
-                    )}
-                    {/* --- Footer if cannot vote --- */}
-                    {!canVote && (
-                      <CardFooter className="bg-muted/30 py-1 px-3 text-center">
-                        <p className="text-xs text-muted-foreground italic w-full">
-                          {isOwnRequest
-                            ? "This is your own request."
-                            : hasVoted
-                            ? "You have already voted."
-                            : "Cannot vote."}
-                        </p>
-                      </CardFooter>
-                    )}
-                  </Card>
+                  <LoanRequestCard
+                    key={req.id}
+                    request={req}
+                    isVoting={isVoting}
+                    canVote={canVote}
+                    isOwnRequest={isOwnRequest}
+                    hasVoted={hasVoted}
+                    onVote={handleVote}
+                  />
                 );
               })}
             </div>
