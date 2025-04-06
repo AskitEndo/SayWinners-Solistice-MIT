@@ -34,5 +34,14 @@
     "amount": 3433,
     "success": false,
     "timestamp": "2025-04-05T23:29:54.819Z"
+  },
+  {
+    "id": "tx-1743903604656-o8eb8",
+    "requestId": "157d950d-16cf-41f4-859d-d5b5c1cf53f1",
+    "type": "loan",
+    "userId": "9f893f33-db6f-4632-ba1a-4fc977c7e11c",
+    "amount": 34343,
+    "success": false,
+    "timestamp": "2025-04-06T01:40:04.656Z"
   }
 ]
