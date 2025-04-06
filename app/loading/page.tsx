@@ -1,5 +1,5 @@
 import React from "react";
-import { LoadingCoin } from "@/components/ui/loading-coin";
+import { LoadingCoin } from "@/components/LoadinCoin";
 
 interface LoadingPageProps {
   message?: string;
