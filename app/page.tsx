@@ -22,7 +22,7 @@ import { Request as LoanRequest } from "@/lib/types";
 import { toast } from "sonner";
 import { Loader2, RefreshCw, IndianRupee } from "lucide-react";
 import { LoanRequestCard } from "@/components/LoanRequestCard";
-import { motion, useScroll, useTransform } from "framer-motion";
+import { motion } from "framer-motion";
 
 // Define the extended type received from the API
 interface PendingRequestResponse extends LoanRequest {
@@ -33,6 +33,32 @@ interface PendingRequestResponse extends LoanRequest {
 const AnimatedNumber = ({ value }: { value: number }) => {
   const [animatedValue, setAnimatedValue] = useState("0");
   const [isAnimating, setIsAnimating] = useState(false);
+
+  // Format number in Indian style (lakhs, crores)
+  const formatIndianNumber = (num: string) => {
+    // Convert to Indian number format (e.g., 10,00,000 instead of 1,000,000)
+    let result = "";
+    const numStr = num.toString();
+    const length = numStr.length;
+
+    // Handle numbers less than 1000
+    if (length <= 3) {
+      return numStr;
+    }
+
+    // Add the last 3 digits
+    result = numStr.substring(length - 3);
+
+    // Add the remaining digits in groups of 2
+    let remaining = numStr.substring(0, length - 3);
+    while (remaining.length > 0) {
+      const chunk = remaining.substring(Math.max(0, remaining.length - 2));
+      result = chunk + "," + result;
+      remaining = remaining.substring(0, Math.max(0, remaining.length - 2));
+    }
+
+    return result;
+  };
 
   useEffect(() => {
     if (!value) return;
@@ -71,7 +97,7 @@ const AnimatedNumber = ({ value }: { value: number }) => {
         isAnimating ? "text-primary/80" : "text-primary"
       }`}
     >
-      ₹{animatedValue.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+      ₹{formatIndianNumber(animatedValue)}
     </span>
   );
 };
@@ -91,6 +117,10 @@ export default function HomePage() {
   const router = useRouter();
   const [showVerification, setShowVerification] = useState(false);
 
+  // Add state to track if manual scroll is happening
+  const [isManualScrolling, setIsManualScrolling] = useState(false);
+  const [forceReset, setForceReset] = useState(0);
+
   // Animation states
   const [pageLoaded, setPageLoaded] = useState(false);
   const [hoveredButton, setHoveredButton] = useState<string | null>(null);
@@ -104,56 +134,98 @@ export default function HomePage() {
   const section1Ref = useRef<HTMLDivElement>(null);
   const section2Ref = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll logic
+  // Handle logo click from navbar - expose a method that can be called
   useEffect(() => {
+    // Define a global function that can be called from Navbar
+    (window as any).resetHomePageScroll = () => {
+      if (containerRef.current) {
+        // Temporarily disable snap scrolling
+        setIsManualScrolling(true);
+
+        // Force reset animations by incrementing state
+        setForceReset((prev) => prev + 1);
+
+        // Scroll to top immediately
+        window.scrollTo({ top: 0, behavior: "auto" });
+
+        // Re-fetch global fund data
+        fetchGlobalFund();
+
+        // Re-enable snap scrolling after animation completes
+        setTimeout(() => {
+          setIsManualScrolling(false);
+        }, 800);
+
+        // Reset animation states
+        setPageLoaded(false);
+        setTimeout(() => setPageLoaded(true), 100);
+      }
+    };
+
+    return () => {
+      delete (window as any).resetHomePageScroll;
+    };
+  }, [fetchGlobalFund]);
+
+  // Auto-scroll logic with improved handling
+  useEffect(() => {
+    if (isManualScrolling) return; // Skip if manual scrolling is happening
+
     const handleScroll = () => {
-      if (!containerRef.current) return;
+      if (!containerRef.current || isManualScrolling) return;
 
       const scrollTop = window.scrollY;
       const windowHeight = window.innerHeight;
       const section1Top = section1Ref.current?.offsetTop || 0;
       const section2Top = section2Ref.current?.offsetTop || 0;
 
-      // Threshold for snapping (percentage of section height)
-      const threshold = windowHeight * 0.3;
+      // Only snap when user stops scrolling
+      clearTimeout((window as any).scrollTimeout);
+      (window as any).scrollTimeout = setTimeout(() => {
+        // Threshold for snapping (percentage of section height)
+        const threshold = windowHeight * 0.3;
 
-      // Snap to section 1 (Numbers)
-      if (scrollTop > 0 && scrollTop < threshold) {
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      }
+        // Snap to section 1 (Numbers)
+        if (scrollTop > 0 && scrollTop < threshold) {
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
 
-      // Snap to section 2 (Hero)
-      if (scrollTop > section1Top + threshold && scrollTop < section2Top) {
-        window.scrollTo({ top: section2Top, behavior: "smooth" });
-      }
+        // Snap to section 2 (Hero)
+        if (scrollTop > section1Top + threshold && scrollTop < section2Top) {
+          window.scrollTo({ top: section2Top, behavior: "smooth" });
+        }
 
-      // If scrolled past section 2, snap to it
-      if (scrollTop > section2Top - threshold && scrollTop < section2Top) {
-        window.scrollTo({ top: section2Top, behavior: "smooth" });
-      }
+        // If scrolled past section 2, snap to it
+        if (
+          scrollTop > section2Top - threshold &&
+          scrollTop < section2Top + threshold
+        ) {
+          window.scrollTo({ top: section2Top, behavior: "smooth" });
+        }
+      }, 100); // Small timeout to wait for scroll to stop
     };
 
     window.addEventListener("scroll", handleScroll);
     return () => {
       window.removeEventListener("scroll", handleScroll);
+      clearTimeout((window as any).scrollTimeout);
     };
-  }, []);
+  }, [isManualScrolling]);
 
   // Effect to handle SVG rotation - more subtle now
   useEffect(() => {
-    if (hoveredButton === "deposit") {
-      // Rotate clockwise when deposit button is hovered - more subtle
-      setSvgRotation(6); // 6 degrees clockwise (reduced from 15)
-    } else if (hoveredButton === "borrow") {
-      // Rotate counter-clockwise when borrow button is hovered - more subtle
-      setSvgRotation(-6); // -6 degrees counter-clockwise (reduced from -15)
+    if (hoveredButton === "borrow") {
+      // Rotate clockwise when borrow button is hovered
+      setSvgRotation(6);
+    } else if (hoveredButton === "deposit") {
+      // Rotate counter-clockwise when deposit button is hovered
+      setSvgRotation(-6);
     } else {
       // Reset rotation when no button is hovered
       setSvgRotation(0);
     }
   }, [hoveredButton]);
 
-  // State for pending requests and voting
   const [pendingRequests, setPendingRequests] = useState<
     PendingRequestResponse[]
   >([]);
@@ -162,10 +234,9 @@ export default function HomePage() {
     [requestId: string]: boolean;
   }>({});
 
-  // Fetch pending requests function
   const fetchPendingRequests = async () => {
     if (!isLoggedIn) {
-      setPendingRequests([]); // Clear if logged out
+      setPendingRequests([]);
       return;
     }
 
@@ -187,16 +258,14 @@ export default function HomePage() {
     } catch (error: any) {
       console.error("HomePage: Error fetching pending requests:", error);
       toast.error(`Error loading pending requests: ${error.message}`);
-      setPendingRequests([]); // Clear requests on error
+      setPendingRequests([]);
     } finally {
       setIsLoadingRequests(false);
     }
   };
 
-  // Fetch on initial load/login state change
   useEffect(() => {
     fetchGlobalFund();
-    // Set page loaded after a small delay to trigger animations
     setTimeout(() => setPageLoaded(true), 500);
   }, [fetchGlobalFund]);
 
@@ -209,11 +278,9 @@ export default function HomePage() {
       setShowVerification(true);
       return;
     }
-    // Navigate if logged in
     router.push(action === "borrow" ? "/borrow" : "/deposit");
   };
 
-  // --- Voting Logic ---
   const handleVote = async (
     requestId: string,
     voteType: "approve" | "reject"
@@ -241,12 +308,10 @@ export default function HomePage() {
       );
       console.log("Vote successful:", result);
 
-      // Update global fund state after successful vote
       if (result.globalFund !== undefined) {
         useGlobalFundStore.getState().setGlobalFund(result.globalFund);
       }
 
-      // If this is the user's own request and their balance was updated, refresh auth store
       if (
         result.userBalance !== undefined &&
         user &&
@@ -255,7 +320,7 @@ export default function HomePage() {
         useAuthStore.getState().updateBalance(result.userBalance);
       }
 
-      fetchPendingRequests(); // Re-fetch to update list
+      fetchPendingRequests();
     } catch (error: any) {
       console.error("Error submitting vote:", error);
       toast.error(`Vote failed: ${error.message}`);
@@ -266,8 +331,11 @@ export default function HomePage() {
 
   return (
     <div
+      key={forceReset} // Add key to force remount when reset
       ref={containerRef}
-      className="snap-y snap-mandatory h-screen overflow-y-auto"
+      className={`h-screen overflow-y-auto ${
+        isManualScrolling ? "" : "snap-y snap-mandatory"
+      }`}
     >
       {/* Global Fund Display - Full Screen Hero Section */}
       <div
@@ -296,14 +364,136 @@ export default function HomePage() {
             )}
           </motion.div>
 
-          {/* "COLLECTED SO FAR" text */}
+          {/* "COLLECTED SO FAR" text - improved animation */}
           <motion.p
             className="text-muted-foreground text-lg md:text-xl mt-4 tracking-widest uppercase font-light"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1, duration: 0.6 }}
+            initial={{ opacity: 0, y: 10, letterSpacing: "0.1em" }}
+            animate={{
+              opacity: 1,
+              y: 0,
+              letterSpacing: "0.25em",
+              transition: {
+                opacity: { duration: 1.2, ease: "easeOut" },
+                y: { duration: 0.8, ease: "easeOut" },
+                letterSpacing: { duration: 1.5, ease: "easeOut" },
+              },
+            }}
+            transition={{ delay: 1, staggerChildren: 0.05 }}
           >
-            Collected So Far
+            <motion.span
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 1.5, ease: "easeInOut" }}
+              className="inline-block"
+            >
+              C
+            </motion.span>
+            <motion.span
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 1.5, ease: "easeInOut", delay: 0.05 }}
+              className="inline-block"
+            >
+              o
+            </motion.span>
+            <motion.span
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 1.5, ease: "easeInOut", delay: 0.1 }}
+              className="inline-block"
+            >
+              l
+            </motion.span>
+            <motion.span
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 1.5, ease: "easeInOut", delay: 0.15 }}
+              className="inline-block"
+            >
+              l
+            </motion.span>
+            <motion.span
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 1.5, ease: "easeInOut", delay: 0.2 }}
+              className="inline-block"
+            >
+              e
+            </motion.span>
+            <motion.span
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 1.5, ease: "easeInOut", delay: 0.25 }}
+              className="inline-block"
+            >
+              c
+            </motion.span>
+            <motion.span
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 1.5, ease: "easeInOut", delay: 0.3 }}
+              className="inline-block"
+            >
+              t
+            </motion.span>
+            <motion.span
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 1.5, ease: "easeInOut", delay: 0.35 }}
+              className="inline-block"
+            >
+              e
+            </motion.span>
+            <motion.span
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 1.5, ease: "easeInOut", delay: 0.4 }}
+              className="inline-block"
+            >
+              d
+            </motion.span>
+            <motion.span className="inline-block mx-2">·</motion.span>
+            <motion.span
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 1.5, ease: "easeInOut", delay: 0.5 }}
+              className="inline-block"
+            >
+              S
+            </motion.span>
+            <motion.span
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 1.5, ease: "easeInOut", delay: 0.55 }}
+              className="inline-block"
+            >
+              o
+            </motion.span>
+            <motion.span className="inline-block mx-2">·</motion.span>
+            <motion.span
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 1.5, ease: "easeInOut", delay: 0.65 }}
+              className="inline-block"
+            >
+              F
+            </motion.span>
+            <motion.span
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 1.5, ease: "easeInOut", delay: 0.7 }}
+              className="inline-block"
+            >
+              a
+            </motion.span>
+            <motion.span
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 1.5, ease: "easeInOut", delay: 0.75 }}
+              className="inline-block"
+            >
+              r
+            </motion.span>
           </motion.p>
 
           {/* Scroll indicator */}
@@ -338,15 +528,14 @@ export default function HomePage() {
             opacity: 1,
             scale: 1,
             rotate: svgRotation,
-            y: hoveredButton ? -10 : 0, // Move SVG up slightly when buttons are hovered (reduced from -20)
+            y: hoveredButton ? -10 : 0,
           }}
           transition={{
             duration: 0.7,
-            rotate: { type: "spring", stiffness: 150, damping: 20 }, // More dampened spring
+            rotate: { type: "spring", stiffness: 150, damping: 20 },
           }}
         >
           <div className="relative w-full h-full translate-y-[8%]">
-            {/* Move SVG down slightly more */}
             <Image
               src="/images/compare.svg"
               alt="DhanSetu Hero"
@@ -357,45 +546,47 @@ export default function HomePage() {
           </div>
         </motion.div>
 
-        {/* Action buttons - moved closer to edges */}
-        <div className="absolute inset-0 flex items-center justify-between px-12 md:px-24">
+        {/* Action buttons - SWAPPED and ENLARGED 3x */}
+        <div className="absolute inset-0 flex items-center justify-between px-8 md:px-16">
+          {/* BORROW BUTTON - Now on LEFT side */}
           <motion.div
             animate={{
-              x: hoveredButton === "deposit" ? -8 : 0, // Reduced from -15
-              y: hoveredButton === "deposit" ? -8 : 0, // Reduced from -15
-              scale: hoveredButton === "deposit" ? 1.08 : 1, // Reduced from 1.2
+              x: hoveredButton === "borrow" ? -8 : 0,
+              y: hoveredButton === "borrow" ? -8 : 0,
+              scale: hoveredButton === "borrow" ? 1.08 : 1,
+            }}
+            transition={{ type: "spring", stiffness: 250, damping: 15 }}
+          >
+            <Button
+              size="lg"
+              className="text-xl px-8 py-8 bg-primary shadow-md hover:bg-primary/90 h-auto w-auto text-primary-foreground font-bold" // 3x larger
+              onClick={() => handleActionClick("borrow")}
+              onMouseEnter={() => setHoveredButton("borrow")}
+              onMouseLeave={() => setHoveredButton(null)}
+            >
+              Borrow Money
+            </Button>
+          </motion.div>
+
+          {/* DEPOSIT BUTTON - Now on RIGHT side */}
+          <motion.div
+            animate={{
+              x: hoveredButton === "deposit" ? 8 : 0,
+              y: hoveredButton === "deposit" ? -8 : 0,
+              scale: hoveredButton === "deposit" ? 1.08 : 1,
             }}
             transition={{ type: "spring", stiffness: 250, damping: 15 }}
           >
             <Button
               size="lg"
               variant="outline"
-              className="text-md px-5 py-6 bg-background/80 backdrop-blur-sm border-2 border-primary/30 hover:border-primary hover:bg-primary/5 shadow-md"
+              className="text-xl px-8 py-8 bg-background/80 backdrop-blur-sm border-2 border-primary/30 hover:border-primary hover:bg-primary/5 shadow-md h-auto w-auto font-bold" // 3x larger
               onClick={() => handleActionClick("deposit")}
               onMouseEnter={() => setHoveredButton("deposit")}
               onMouseLeave={() => setHoveredButton(null)}
             >
-              <IndianRupee className="mr-2 h-4 w-4" />
+              <IndianRupee className="mr-2 h-5 w-5" />
               Deposit Money
-            </Button>
-          </motion.div>
-
-          <motion.div
-            animate={{
-              x: hoveredButton === "borrow" ? 8 : 0, // Reduced from 15
-              y: hoveredButton === "borrow" ? -8 : 0, // Reduced from -15
-              scale: hoveredButton === "borrow" ? 1.08 : 1, // Reduced from 1.2
-            }}
-            transition={{ type: "spring", stiffness: 250, damping: 15 }}
-          >
-            <Button
-              size="lg"
-              className="text-md px-5 py-6 bg-primary shadow-md hover:bg-primary/90"
-              onClick={() => handleActionClick("borrow")}
-              onMouseEnter={() => setHoveredButton("borrow")}
-              onMouseLeave={() => setHoveredButton(null)}
-            >
-              Borrow Money
             </Button>
           </motion.div>
         </div>
@@ -411,7 +602,7 @@ export default function HomePage() {
               <Button
                 size="lg"
                 variant="secondary"
-                className="text-md px-6 py-5 bg-background/70 backdrop-blur-sm shadow-md"
+                className="text-lg px-8 py-6 bg-background/70 backdrop-blur-sm shadow-md"
                 onClick={() => setShowVerification(true)}
               >
                 Login / Verify Identity
@@ -421,7 +612,6 @@ export default function HomePage() {
         )}
       </div>
 
-      {/* Pending Approvals Section (Card) */}
       <div className="min-h-screen w-full snap-start py-20 bg-gradient-to-b from-primary/5 to-background">
         <div className="container mx-auto px-4">
           <motion.div
@@ -534,7 +724,6 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Verification Modal */}
       <FaceVerification
         open={showVerification}
         onOpenChange={setShowVerification}

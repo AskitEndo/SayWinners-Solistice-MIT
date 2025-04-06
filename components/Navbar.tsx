@@ -53,17 +53,25 @@ export const Navbar: React.FC = () => {
     fetchGlobalFund();
   }, [fetchGlobalFund]);
 
-  // Handle logo click - scroll to top with animation
+  // Handle logo click - use the global function exposed by HomePage
   const handleLogoClick = (e: React.MouseEvent) => {
     if (pathname === "/") {
       e.preventDefault();
 
-      window.scrollTo({
-        top: 0,
-        behavior: "smooth",
-      });
-
-      fetchGlobalFund();
+      // Call the global function exposed by HomePage if available
+      if (
+        typeof window !== "undefined" &&
+        (window as any).resetHomePageScroll
+      ) {
+        (window as any).resetHomePageScroll();
+      } else {
+        // Fallback if function is not available
+        window.scrollTo({
+          top: 0,
+          behavior: "auto",
+        });
+        fetchGlobalFund();
+      }
     }
   };
 
