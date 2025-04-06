@@ -1,114 +1,98 @@
 // app/api/requests/submit/route.ts
 import { NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
-import { getUsers, getRequests, saveRequests } from "@/lib/data-utils"; // Adjust path if needed
-import { Request as LoanRequest } from "@/lib/types"; // Rename imported Request type to avoid conflict
-
-// Define constants for approval logic
-const APPROVAL_THRESHOLD_PERCENT = 0.8; // 80%
+import {
+  getUsers,
+  getRequests,
+  saveRequests,
+  logTransaction,
+  getGlobalState,
+  saveGlobalState,
+} from "@/lib/data-utils";
+import {
+  sendNewRequestNotification,
+  sendNewVotingRequestNotification,
+  sendRequestStatusUpdateNotification,
+  sendVoteReceivedNotification,
+} from "@/lib/email-utils";
 
 export async function POST(request: Request) {
-  console.log("API Submit Request: Received request.");
-
   try {
-    const body = await request.json();
-    console.log("API Submit Request: Body:", body);
+    const data = await request.json();
+    const { userId, type, title, category, amount, details } = data;
 
-    // --- Input Validation ---
-    const { userId, type, title, category, amount, details } = body;
-
-    if (
-      !userId ||
-      !type ||
-      (type === "loan" && (!title || !category)) ||
-      !amount ||
-      !details
-    ) {
-      console.error("API Submit Request: Invalid request data received.", body);
+    // Input validation
+    if (!userId || !type || !amount || !details) {
       return NextResponse.json(
-        { message: "Missing required fields." },
+        { error: "Required fields missing" },
         { status: 400 }
       );
     }
 
-    if (type !== "loan" && type !== "deposit") {
-      return NextResponse.json(
-        { message: "Invalid request type." },
-        { status: 400 }
-      );
-    }
-
-    const numericAmount = parseFloat(amount);
-    if (isNaN(numericAmount) || numericAmount <= 0) {
-      return NextResponse.json({ message: "Invalid amount." }, { status: 400 });
-    }
-
-    // --- Check if User Exists ---
+    // Get all users and requests
     const users = await getUsers();
-    const requestingUser = users.find((u) => u.id === userId);
+    const requests = await getRequests();
+
+    // Find the requesting user
+    const requestingUser = users.find((user) => user.id === userId);
     if (!requestingUser) {
-      console.warn(`API Submit Request: User ID ${userId} not found.`);
-      // In a real app with auth, this check would be more robust
-      return NextResponse.json(
-        { message: "Requesting user not found." },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // --- Calculate Votes Required ---
-    const totalUsers = users.length;
-    // Require votes from others, so subtract the requester if totalUsers > 1
-    const votersRequiredForApproval =
-      totalUsers > 1
-        ? Math.ceil((totalUsers - 1) * APPROVAL_THRESHOLD_PERCENT)
-        : 0; // Auto-approve if only one user? Or require 1? Let's require 0 for now if only 1 user.
+    // Calculate votes required (80% of all users excluding requester)
+    const eligibleVoters = users.length - 1; // exclude requester
+    const votesRequired = Math.ceil(eligibleVoters * 0.8);
 
-    console.log(
-      `API Submit Request: Total Users=${totalUsers}, Voters Required for Approval=${votersRequiredForApproval}`
-    );
-
-    // --- Create New Request Object ---
+    // Create new request
     const requestId = uuidv4();
-    const newRequest: LoanRequest = {
-      // Use the imported LoanRequest type
+    const newRequest = {
       id: requestId,
-      userId: userId,
-      type: type,
-      // Only include loan-specific fields if type is 'loan'
-      ...(type === "loan" && { title: title, category: category }),
-      amount: numericAmount,
-      details: details,
+      userId,
+      type,
+      title: type === "loan" ? title : undefined,
+      category: type === "loan" ? category : undefined,
+      amount: Number(amount),
+      details,
       status: "pending",
       createdAt: new Date().toISOString(),
-      votesRequired: votersRequiredForApproval, // Store the calculated number
-      approvedBy: [], // Initialize as empty arrays
+      votesRequired,
+      approvedBy: [],
       rejectedBy: [],
-      // processedAt will be set when approved/rejected
     };
 
-    // --- Save Request ---
-    const allRequests = await getRequests();
-    allRequests.push(newRequest);
-    await saveRequests(allRequests);
+    // Save the request
+    requests.push(newRequest);
+    await saveRequests(requests);
 
-    console.log(
-      `API Submit Request: ${type} request ${requestId} created successfully for user ${userId}.`
-    );
+    // Send email notifications
+    try {
+      // 1. Send notification to requester
+      await sendNewRequestNotification(requestingUser, newRequest);
+      console.log(`Request notification sent to ${requestingUser.email}`);
 
-    // --- Return Success Response ---
+      // 2. Send notifications to other users for voting
+      const otherUsers = users.filter((user) => user.id !== userId);
+      for (const user of otherUsers) {
+        await sendNewVotingRequestNotification(
+          user,
+          newRequest,
+          requestingUser.name
+        );
+      }
+      console.log(`Voting notifications sent to ${otherUsers.length} users`);
+    } catch (emailError) {
+      console.error("Error sending email notifications:", emailError);
+      // Continue with request creation even if emails fail
+    }
+
+    return NextResponse.json({
+      success: true,
+      request: newRequest,
+    });
+  } catch (error) {
+    console.error("Request submission error:", error);
     return NextResponse.json(
-      {
-        message: `${
-          type.charAt(0).toUpperCase() + type.slice(1)
-        } request submitted successfully!`,
-        requestId: requestId,
-      },
-      { status: 201 }
-    ); // Created
-  } catch (error: any) {
-    console.error("API Submit Request: Error processing request:", error);
-    return NextResponse.json(
-      { message: error.message || "An unexpected error occurred." },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }

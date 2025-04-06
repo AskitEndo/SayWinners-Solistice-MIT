@@ -64,5 +64,16 @@
     "accountBalance": 10000,
     "registeredAt": "2025-04-06T01:39:24.624Z",
     "faceImagesCaptured": true
+  },
+  {
+    "id": "3e355a40-d31c-407f-a54e-a87097325a39",
+    "name": "Ankit Kumar Singh",
+    "email": "animatedaskit5459@gmail.com",
+    "age": 11,
+    "address": "Plot no.10th E,7th cross,KG halli, Jalahalli West, Bangalore,560015",
+    "bankAccountNumber": "121212",
+    "accountBalance": 10000,
+    "registeredAt": "2025-04-06T05:12:11.969Z",
+    "faceImagesCaptured": true
   }
 ]
