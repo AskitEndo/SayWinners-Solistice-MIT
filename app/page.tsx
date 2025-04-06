@@ -366,134 +366,16 @@ export default function HomePage() {
 
           {/* "COLLECTED SO FAR" text - improved animation */}
           <motion.p
-            className="text-muted-foreground text-lg md:text-xl mt-4 tracking-widest uppercase font-light"
-            initial={{ opacity: 0, y: 10, letterSpacing: "0.1em" }}
-            animate={{
-              opacity: 1,
-              y: 0,
-              letterSpacing: "0.25em",
-              transition: {
-                opacity: { duration: 1.2, ease: "easeOut" },
-                y: { duration: 0.8, ease: "easeOut" },
-                letterSpacing: { duration: 1.5, ease: "easeOut" },
-              },
+            className="text-muted-foreground text-lg md:text-xl mt-4 tracking-wider uppercase font-light subtle-glow"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{
+              duration: 1.2,
+              ease: "easeOut",
+              delay: 1.8,
             }}
-            transition={{ delay: 1, staggerChildren: 0.05 }}
           >
-            <motion.span
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 1.5, ease: "easeInOut" }}
-              className="inline-block"
-            >
-              C
-            </motion.span>
-            <motion.span
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 1.5, ease: "easeInOut", delay: 0.05 }}
-              className="inline-block"
-            >
-              o
-            </motion.span>
-            <motion.span
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 1.5, ease: "easeInOut", delay: 0.1 }}
-              className="inline-block"
-            >
-              l
-            </motion.span>
-            <motion.span
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 1.5, ease: "easeInOut", delay: 0.15 }}
-              className="inline-block"
-            >
-              l
-            </motion.span>
-            <motion.span
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 1.5, ease: "easeInOut", delay: 0.2 }}
-              className="inline-block"
-            >
-              e
-            </motion.span>
-            <motion.span
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 1.5, ease: "easeInOut", delay: 0.25 }}
-              className="inline-block"
-            >
-              c
-            </motion.span>
-            <motion.span
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 1.5, ease: "easeInOut", delay: 0.3 }}
-              className="inline-block"
-            >
-              t
-            </motion.span>
-            <motion.span
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 1.5, ease: "easeInOut", delay: 0.35 }}
-              className="inline-block"
-            >
-              e
-            </motion.span>
-            <motion.span
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 1.5, ease: "easeInOut", delay: 0.4 }}
-              className="inline-block"
-            >
-              d
-            </motion.span>
-            <motion.span className="inline-block mx-2">·</motion.span>
-            <motion.span
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 1.5, ease: "easeInOut", delay: 0.5 }}
-              className="inline-block"
-            >
-              S
-            </motion.span>
-            <motion.span
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 1.5, ease: "easeInOut", delay: 0.55 }}
-              className="inline-block"
-            >
-              o
-            </motion.span>
-            <motion.span className="inline-block mx-2">·</motion.span>
-            <motion.span
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 1.5, ease: "easeInOut", delay: 0.65 }}
-              className="inline-block"
-            >
-              F
-            </motion.span>
-            <motion.span
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 1.5, ease: "easeInOut", delay: 0.7 }}
-              className="inline-block"
-            >
-              a
-            </motion.span>
-            <motion.span
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 1.5, ease: "easeInOut", delay: 0.75 }}
-              className="inline-block"
-            >
-              r
-            </motion.span>
+            COLLECTED SO FAR
           </motion.p>
 
           {/* Scroll indicator */}
